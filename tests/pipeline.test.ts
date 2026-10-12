@@ -232,6 +232,32 @@ describe('selection', () => {
     }
   });
 
+  it('selects the React layer from the framework alone', async () => {
+    const { stack, selection, report } = await run('react');
+    expect(stack.technologies.map((tech) => tech.id)).toEqual(['react']);
+
+    expect(selection.rules.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining([
+        'react-accessibility',
+        'react-components',
+        'react-conventions',
+        'react-hooks',
+        'react-security',
+        'react-state',
+        'react-testing',
+      ]),
+    );
+    expect(selection.skills.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining([
+        'react-component',
+        'react-form',
+        'react-infer-conventions',
+        'react-verify',
+      ]),
+    );
+    expect(report.ok).toBe(true);
+  });
+
   it("leaves another framework's content out", async () => {
     const { selection } = await run('laravel');
     const ids = selection.rules.map((entry) => entry.artifact.meta.id);

@@ -125,6 +125,9 @@ technologies:
 
   laravel:
     name: Laravel
+
+  react:
+    name: React
 ```
 
 | Trường | Ý nghĩa |
@@ -143,6 +146,7 @@ fail. `agent-stack catalog` in ra mỗi framework có gì, để thấy ngay ch�
   ├─────────┼───────────────┼───────┼────────┼──────────┤
   │ rails   │ Ruby on Rails │     3 │     29 │        9 │
   │ laravel │ Laravel       │     6 │     30 │        9 │
+  │ react   │ React         │     7 │     30 │        9 │
   └─────────┴───────────────┴───────┴────────┴──────────┘
 ```
 
