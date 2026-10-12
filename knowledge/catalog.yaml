@@ -21,3 +21,6 @@ technologies:
 
   laravel:
     name: Laravel
+
+  fastapi:
+    name: FastAPI
