@@ -274,9 +274,9 @@ Nếu bạn đang viết các bước được đánh số thì đó là **skill
 
 **Layer 1 — global.** Copy từ một dự án MIT tại commit được ghim trong `upstream.yaml`: 26 skill và 9 command từ [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills).
 
-**Layer 2 — tự viết trong repo này.** Ruby, Rails, Active Record, tất cả gate bằng `rails`.
+**Layer 2 — tự viết trong repo này.** Ruby, Rails, Active Record gate bằng `rails`; PHP, Eloquent, Pest gate bằng `laravel`; component, state, test và accessibility của Vue gate bằng `vue`.
 
-**Catalog đúng hai entry: Rails và Laravel**, và cả hai đều đã có rule và skill riêng. Framework nào có trong catalog mà chưa có nội dung thì validator báo là `uncovered-technology` chứ không làm hỏng lần chạy.
+**Catalog có ba entry: Rails, Laravel và Vue**, và cả ba đều đã có rule và skill riêng. Framework nào có trong catalog mà chưa có nội dung thì validator báo là `uncovered-technology` chứ không làm hỏng lần chạy.
 
 > [!NOTE]
 > Một framework có trong catalog mà chưa có rule nào là **khoảng trống đã được ghi nhận, không phải bug**. Bổ sung nội dung cho nó là đóng góp có giá trị nhất.

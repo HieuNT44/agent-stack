@@ -24,3 +24,6 @@ technologies:
 
   fastapi:
     name: FastAPI
+
+  vue:
+    name: Vue

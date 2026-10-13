@@ -232,6 +232,26 @@ describe('selection', () => {
     }
   });
 
+  it('selects the Vue layer from the framework alone', async () => {
+    const { stack, selection, report } = await run('vue');
+    expect(stack.technologies.map((tech) => tech.id)).toEqual(['vue']);
+
+    expect(selection.rules.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining([
+        'vue-accessibility',
+        'vue-components',
+        'vue-conventions',
+        'vue-security',
+        'vue-state',
+        'vue-testing',
+      ]),
+    );
+    expect(selection.skills.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining(['vue-component', 'vue-form', 'vue-infer-conventions', 'vue-verify']),
+    );
+    expect(report.ok).toBe(true);
+  });
+
   it("leaves another framework's content out", async () => {
     const { selection } = await run('laravel');
     const ids = selection.rules.map((entry) => entry.artifact.meta.id);
