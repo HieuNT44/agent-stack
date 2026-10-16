@@ -39,17 +39,6 @@ Do not convert existing code to the style of these rules unless explicitly asked
 
 React 19+ takes `ref` as a regular prop; React 18 and earlier need `forwardRef`. Follow what the existing components do.
 
-```tsx
-// React 19+
-import type { ComponentProps } from 'react';
-
-type InputProps = ComponentProps<'input'>;
-
-export function TextInput({ ref, ...rest }: InputProps) {
-  return <input ref={ref} {...rest} />;
-}
-```
-
 ## Composition & context
 
 - Pass children and props; prefer composition (`children`, slot props) to a growing list of configuration props.
@@ -68,13 +57,6 @@ export function TextInput({ ref, ...rest }: InputProps) {
 
 - Wrap risky subtrees (a widget with third-party data, each route) in an error boundary, the way the project already does it (`react-error-boundary`, the framework's `error.tsx`/`ErrorBoundary` route export, or a class component). Error boundaries do not catch errors in event handlers, timers or async code: handle those where they happen.
 - Put an error boundary above every `Suspense` boundary that waits for data. Without one, a failed load takes down everything up to the nearest boundary higher up, or the whole app.
-  ```tsx
-  <ErrorBoundary fallback={<OrderError />}>
-    <Suspense fallback={<OrderSkeleton />}>
-      <OrderDetails id={id} />
-    </Suspense>
-  </ErrorBoundary>
-  ```
 - A `Suspense` fallback replaces the whole subtree below it. Place boundaries close to the data that suspends, and use several narrow ones so content already loaded stays on screen.
 
 ## Server rendering
@@ -85,38 +67,7 @@ These apply only when the app is rendered on the server (Next.js, Remix/React Ro
 - Do not access `window`/`document` at module top level in a file the server imports.
 - Next.js App Router: keep `'use client'` as far down the tree as possible, on the interactive leaf, not on a page or layout. The directive goes at the very top of the file, before any import.
 - Props passed from a Server to a Client Component must be serializable (no functions except Server Actions, no class instances).
-- A file imported by a Client Component becomes client code, with everything it imports. Pass server-rendered content into a Client Component as `children` instead of importing it there:
-  ```tsx
-  // app/orders/page.tsx — a Server Component
-  export default async function OrdersPage() {
-    const orders = await getOrders();
-    return (
-      <FilterPanel>
-        <OrderTable orders={orders} />
-      </FilterPanel>
-    );
-  }
-  ```
-  ```tsx
-  // app/orders/FilterPanel.tsx
-  'use client';
-
-  import { useState, type ReactNode } from 'react';
-
-  export function FilterPanel({ children }: { children: ReactNode }) {
-    const [open, setOpen] = useState(false);
-    return (
-      <section>
-        <button type="button" onClick={() => setOpen((o) => !o)}>
-          Filters
-        </button>
-        {open && <Filters />}
-        {children}
-      </section>
-    );
-  }
-  ```
-  `OrderTable` stays a Server Component because `FilterPanel` receives it rendered, and never imports it.
+- A file imported by a Client Component becomes client code, with everything it imports. Pass server-rendered content into a Client Component as `children` instead of importing it there: the child stays a Server Component, because the Client Component receives it already rendered and never imports it.
 
 ## Styling
 

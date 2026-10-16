@@ -34,12 +34,7 @@ paths:
 
 - Test what the user sees and does, not implementation: no assertions on state, props passed to children, hook internals, component instances, or CSS class names. A refactor that keeps behaviour must keep the tests green.
 - Default to component/integration tests that render a feature with its real children. Unit-test pure functions (formatting, calculations, reducers) directly, without rendering. Do not shallow-render.
-- Test a custom hook through a component that uses it; use `renderHook` (from `@testing-library/react`, React 18+) only for a hook shared by several components. `@testing-library/react-hooks` is deprecated. When a test calls a hook's function directly, wrap the call in `act()` — nothing else will flush the update:
-  ```tsx
-  const { result } = renderHook(() => useCounter());
-  act(() => result.current.increment());
-  expect(result.current.count).toBe(1);
-  ```
+- Test a custom hook through a component that uses it; use `renderHook` (from `@testing-library/react`, React 18+) only for a hook shared by several components. `@testing-library/react-hooks` is deprecated. When a test calls a hook's function directly, wrap the call in `act()` — nothing else will flush the update.
 - Add no new large snapshot tests: they pass for any change once updated, so they verify nothing. A small inline snapshot of a formatted value is fine.
 
 ## Queries
@@ -52,20 +47,6 @@ paths:
 ## Interactions & async
 
 - Simulate input with `user-event`, not `fireEvent`: create `const user = userEvent.setup()` before rendering, and `await` every call. `fireEvent` dispatches one event, skipping the focus, keyboard and pointer events a real user produces.
-  ```tsx
-  import { render, screen } from '@testing-library/react';
-  import userEvent from '@testing-library/user-event';
-
-  it('confirms the saved name', async () => {
-    const user = userEvent.setup();
-    render(<ProfileForm />); // or the project's render helper
-
-    await user.type(screen.getByLabelText('Name'), 'Ada');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved');
-  });
-  ```
 - Wait for the UI, not for time: `await screen.findBy…`, or `await waitFor(() => expect(...))` with one assertion and no side effects inside the callback. No arbitrary `sleep`/`setTimeout` in tests.
 - An "update was not wrapped in act(...)" warning in a component test means the test ended or asserted before an update finished. Await the resulting UI change (`findBy…`); do not silence it by wrapping `user-event` or `render` calls in `act()` — Testing Library already does. Calling a hook's function through `renderHook` is the exception (see above).
 - Fake timers: `vi.useFakeTimers()`/`jest.useFakeTimers()`, restore in `afterEach`; with `user-event`, pass the clock: `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`. Fix the date with the runner's `setSystemTime` when output depends on now.
@@ -73,18 +54,7 @@ paths:
 ## Network & dependencies
 
 - Never call a real API. With MSW in the project, mock at the network level: shared handlers for the happy path, `server.use(...)` inside a test for errors and edge cases, and `onUnhandledRequest: 'error'` so an unmocked request fails the test. Without MSW, mock the project's API module, not `fetch` internals or the component under test.
-  ```tsx
-  // MSW 2.x (1.x uses `rest` and `res(ctx.status(500))`)
-  import { http, HttpResponse } from 'msw';
-  import { server } from '../mocks/server'; // wherever the project's setup creates it
-
-  it('shows an error when orders fail to load', async () => {
-    server.use(http.get('/api/orders', () => new HttpResponse(null, { status: 500 })));
-    render(<OrdersPage />);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not load/i);
-  });
-  ```
+- MSW 2.x writes handlers with `http` and `HttpResponse`; 1.x uses `rest` and `ctx`. Check the installed major before copying one.
 - Test the failure paths the component handles: an error response (e.g. 500) and an empty result, besides the happy path.
 - TanStack Query: create a new `QueryClient` per test with retries off (`defaultOptions: { queries: { retry: false } }`); a shared client leaks cached data between tests, and the default three retries with backoff make error tests time out.
 - Mock modules (`vi.mock`/`jest.mock`) only at boundaries the test cannot control (the API client, analytics, browser APIs jsdom lacks such as `IntersectionObserver` or `matchMedia`). Never mock the component under test or React itself.

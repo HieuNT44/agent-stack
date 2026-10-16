@@ -7,40 +7,16 @@ paths:
   - "**/hooks/**"
 ---
 
-# React Hooks, State & Effects
+# React Hooks & Effects
 
 ## Rules of hooks
 
 - Call hooks at the top level of a component or a custom hook only: never inside conditions, loops, nested functions, or after an early `return`. React matches state to hooks by call order, so a hook skipped on one render hands every later hook the wrong state. (`use()` is the one exception: it may be called conditionally.)
-  ```tsx
-  type Props = { amount: number; showTax: boolean };
-
-  // No: useTax runs only on some renders
-  function Price({ amount, showTax }: Props) {
-    if (!showTax) return <span>{amount}</span>;
-    const tax = useTax(amount);
-    return <span>{amount + tax}</span>;
-  }
-
-  // Yes: call it every render, branch on the result
-  function Price({ amount, showTax }: Props) {
-    const tax = useTax(amount);
-    return <span>{showTax ? amount + tax : amount}</span>;
-  }
-  ```
 - Call hooks only from components and from functions whose name starts with `use`.
 
-## State
+## Local state
 
-- Keep the minimum state. Anything computable from props or other state is computed during render, not stored and kept in sync with an effect:
-  ```tsx
-  // No: an extra render, and a moment where the two disagree
-  const [fullName, setFullName] = useState('');
-  useEffect(() => setFullName(`${first} ${last}`), [first, last]);
-
-  // Yes
-  const fullName = `${first} ${last}`;
-  ```
+- Keep the minimum state. Anything computable from props or other state is computed during render, not stored and kept in sync with an effect: that costs an extra render, and a moment where the two disagree.
 - Do not copy a prop into state, except as an explicitly named initial value (`initialCount`). To reset a component's state when an identity changes, give it a `key` (`<Profile key={userId} />`).
 - Store IDs, not copies of objects that also live in a list (`selectedId`, not `selectedItem`), so the selection cannot go stale when the list updates.
 - Update state immutably: new objects/arrays (`[...items, item]`, `items.map(...)`, `{ ...user, name }`), never `push`, `splice` or property assignment on the current value. React compares by reference and skips the update otherwise.
@@ -56,14 +32,7 @@ paths:
   - notifying a parent of a change → call its callback in the same event handler that changed the state;
   - resetting state when a prop changes → use a `key`;
   - fetching data → use the project's data-fetching approach (a query library, router loaders, Server Components).
-- Every effect that subscribes, listens, starts a timer or opens a connection returns a cleanup that undoes it:
-  ```tsx
-  useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-  ```
+- Every effect that subscribes, listens, starts a timer or opens a connection returns a cleanup that undoes it.
 - Development `StrictMode` runs every effect, then its cleanup, then the effect again, on purpose. A request sent twice or a listener added twice in development means a cleanup is missing; fix the effect, never remove `StrictMode`.
 - List every reactive value the effect reads in its dependency array; the array describes the code, it is not a switch for when to run. If the effect runs too often, change the code: move the object or function it needs inside the effect, depend on a primitive (`user.id`, not `user`), or read the latest value without reacting to it with `useEffectEvent` (React 19.2+).
 - Objects, arrays and functions created during render are new on every render; used as a dependency, they re-run the effect every time.
@@ -71,21 +40,7 @@ paths:
 
 ## Stale closures
 
-A function created during a render sees that render's props and state, forever. Callbacks that outlive the render — intervals, timeouts, subscriptions, `await` continuations — read old values:
-
-```tsx
-// No: `count` is the value from the first render, so this stops at 1
-useEffect(() => {
-  const id = setInterval(() => setCount(count + 1), 1000);
-  return () => clearInterval(id);
-}, []);
-
-// Yes: the updater receives the current value
-useEffect(() => {
-  const id = setInterval(() => setCount((c) => c + 1), 1000);
-  return () => clearInterval(id);
-}, []);
-```
+A function created during a render sees that render's props and state, forever. Callbacks that outlive the render — intervals, timeouts, subscriptions, `await` continuations — read old values. An interval started in a mount-only effect that calls `setCount(count + 1)` keeps setting the first render's value plus one.
 
 Fix a stale read with, in order of preference: an updater function; the value in the dependency array (the effect re-subscribes with fresh values); `useEffectEvent` (React 19.2+); or, as a last resort, a ref kept in sync with the latest value.
 
@@ -104,24 +59,7 @@ Fix a stale read with, in order of preference: an updater function; the value in
 
 ## External stores
 
-Subscribe to anything outside React that changes over time (browser APIs, a non-React store, an event emitter) with `useSyncExternalStore`, not an effect plus `useState`; it stays consistent under concurrent rendering. Declare `subscribe` outside the component: a function created inline is new on every render, so React unsubscribes and resubscribes each time.
-
-```tsx
-function subscribe(callback: () => void) {
-  window.addEventListener('online', callback);
-  window.addEventListener('offline', callback);
-  return () => {
-    window.removeEventListener('online', callback);
-    window.removeEventListener('offline', callback);
-  };
-}
-
-export function useOnlineStatus() {
-  return useSyncExternalStore(subscribe, () => navigator.onLine, () => true);
-}
-```
-
-The third argument is the value used during server rendering; omit it in a client-only app.
+Subscribe to anything outside React that changes over time (browser APIs, a non-React store, an event emitter) with `useSyncExternalStore`, not an effect plus `useState`; it stays consistent under concurrent rendering. Declare `subscribe` outside the component: a function created inline is new on every render, so React unsubscribes and resubscribes each time. When the app renders on the server, also pass `getServerSnapshot`, the value used during server rendering.
 
 ## Project-specific
 

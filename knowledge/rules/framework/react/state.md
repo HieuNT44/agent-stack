@@ -41,18 +41,7 @@ Do not add a new state library, or a second one doing the same job, without appr
 
 Only when the project has no data-fetching library, and only on the client:
 
-- Guard against out-of-order responses: when the input changes quickly (typing, paging), an older response can arrive last and overwrite the newer one. Cancel or ignore it in the cleanup:
-  ```tsx
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchOrders(status, { signal: controller.signal })
-      .then(setOrders)
-      .catch((error) => {
-        if (error.name !== 'AbortError') setError(error);
-      });
-    return () => controller.abort();
-  }, [status]);
-  ```
+- Guard against out-of-order responses: when the input changes quickly (typing, paging), an older response can arrive last and overwrite the newer one. Pass an `AbortController` signal to the request, abort it in the cleanup, and ignore the resulting `AbortError`.
 - `fetch` resolves on 4xx/5xx; check `response.ok` before reading the body as data.
 - If the same fetch is needed in a second place, propose a data-fetching library instead of growing a hand-rolled cache.
 
