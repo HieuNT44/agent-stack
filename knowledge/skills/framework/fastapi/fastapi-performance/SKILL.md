@@ -1,6 +1,6 @@
 ---
 name: fastapi-performance
-description: Measure-first performance tuning for FastAPI/SQLAlchemy (async and sync): N+1, indexes, pagination, caching, blocking calls, concurrency, pool/worker sizing, external-call latency. Project-agnostic. Use whenever an endpoint or query is slow, times out, list endpoints return too much, or the user asks to optimize or speed up an API.
+description: "Measure-first performance tuning for FastAPI/SQLAlchemy (async and sync): N+1, indexes, pagination, caching, blocking calls, concurrency, pool/worker sizing, external-call latency. Use whenever an endpoint or query is slow, times out, list endpoints return too much, or the user asks to optimize or speed up an API."
 ---
 
 # FastAPI performance

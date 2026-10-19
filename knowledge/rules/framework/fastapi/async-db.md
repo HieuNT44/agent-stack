@@ -1,16 +1,16 @@
 ---
 description: SQLAlchemy 2.0 session, repository and transaction rules (async and sync)
-paths: ["**/*.py"]
+paths: ["**/repositories/**/*.py", "**/repository/**/*.py", "**/models/**/*.py", "**/entities/**/*.py", "**/db/**/*.py", "**/database/**/*.py", "**/infrastructure/**/*.py", "**/*session*.py"]
 ---
 # DB access (SQLAlchemy 2.0 — async & sync)
 
-Check `SYNC_OR_ASYNC` in Project bindings. **Pick one style per service; never mix.**
+Find out whether the service is sync or async (`AsyncSession` vs `Session`, `async def` vs `def` routes). **Pick one style per service; never mix.**
 
 ## Both styles
 - One session per request via a dependency; never construct sessions in controllers/services; never share across requests/tasks.
-- Commit-after-response caveat for yield dependencies on newer FastAPI: see `README-fastapi.md`; commit explicitly for writes that must not fail silently.
-- **Transaction ownership in one place** (session dependency: commit on success, rollback on error). Repositories `flush()`, not `commit()` — unless bindings say otherwise.
-- Read the project's real session setup before assuming (who commits/rolls back, session factory, base repository behavior); bindings win over this rule.
+- FastAPI 0.118+ runs a `yield` dependency's exit code after the response is sent, so a commit that fails there cannot change the status. Commit explicitly, before returning, for writes that must not fail silently.
+- **Transaction ownership in one place** (session dependency: commit on success, rollback on error). Repositories `flush()`, not `commit()` — unless the project's session setup says otherwise.
+- Read the project's real session setup before assuming (who commits/rolls back, session factory, base repository behavior); what the project already does wins over this rule.
 - Only repositories call `execute/add/merge/delete`.
 - 2.0 style: `select()`, `.scalars()`, `.scalar_one_or_none()`. No legacy `session.query`.
 - No N+1: no query in a loop; batch with `IN (...)`/joins. Eager-load relations (`selectinload` collections, `joinedload` scalar).

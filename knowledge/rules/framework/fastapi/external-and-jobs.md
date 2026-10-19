@@ -1,6 +1,6 @@
 ---
 description: External clients, background jobs, caching and idempotency in FastAPI
-paths: ["**/*.py"]
+paths: ["**/clients/**/*.py", "**/integrations/**/*.py", "**/tasks/**/*.py", "**/jobs/**/*.py", "**/workers/**/*.py", "**/cache/**/*.py", "**/infrastructure/**/*.py"]
 ---
 # External calls, jobs, cache
 
@@ -19,7 +19,7 @@ paths: ["**/*.py"]
 - Never reuse the request's session in a background task.
 
 ## Cache (Redis)
-- Key = `<app>:<env>:<resource>:<scope-id>:<version>`; always TTL; include user/tenant id in key for per-user data.
+- Key = `app:env:resource:scope-id:version`; always TTL; include user/tenant id in key for per-user data.
 - Cache-aside; invalidate on write; tolerate cache outage (fall back to DB, don't 500).
 - Don't cache auth decisions longer than token validity.
 

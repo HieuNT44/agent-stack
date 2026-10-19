@@ -1,10 +1,10 @@
 ---
 description: FastAPI layering and dependency direction
-paths: ["**/*.py"]
+paths: ["**/main.py", "**/routers/**/*.py", "**/routes/**/*.py", "**/api/**/*.py", "**/presentation/**/*.py", "**/services/**/*.py", "**/application/**/*.py", "**/domain/**/*.py", "**/repositories/**/*.py", "**/infrastructure/**/*.py"]
 ---
 # FastAPI architecture
 
-Read the repo's **Project bindings** (`CLAUDE.md`) for real paths/names. Mirror the closest existing feature.
+Take real paths and names from the project's `AGENTS.md` or its code. Mirror the closest existing feature.
 
 ## Layers (outer → inner)
 - **Router/controller**: HTTP in/out only. Parse request, call service, shape response. No business logic, no ORM.
@@ -13,7 +13,7 @@ Read the repo's **Project bindings** (`CLAUDE.md`) for real paths/names. Mirror 
 - **Schemas** (request/response, Pydantic) ≠ **DTOs** (inter-layer) ≠ **entities** (ORM). Don't leak ORM entities in responses.
 
 ## Dependency direction
-Outer layers depend on inner ones; the domain depends on nothing; infrastructure implements interfaces owned by inner layers. Inner layers never import outer ones (concrete layer names: bindings).
+Outer layers depend on inner ones; the domain depends on nothing; infrastructure implements interfaces owned by inner layers. Inner layers never import outer ones (use the project's own layer names).
 Services depend on repository **interfaces** (ABC/Protocol), impls injected at the composition root (route dependency factory).
 
 ## Rules

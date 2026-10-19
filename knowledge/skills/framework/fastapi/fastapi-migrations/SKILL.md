@@ -1,15 +1,15 @@
 ---
 name: fastapi-migrations
-description: Safe Alembic migration workflow for FastAPI/SQLAlchemy projects: autogenerate, review, backward-compatible steps, up/down test, table ownership. Project-agnostic. Use whenever adding or changing tables, columns, indexes, constraints, enums or data backfills, or when the user mentions alembic, schema change, or migration.
+description: "Safe Alembic migration workflow for FastAPI/SQLAlchemy projects: autogenerate, review, backward-compatible steps, up/down test, table ownership. Use whenever adding or changing tables, columns, indexes, constraints, enums or data backfills, or when the user mentions alembic, schema change, or migration."
 ---
 
 # Migrations (Alembic)
 
-Tool/command/owner repo: `MIGRATION_TOOL` in Project bindings. **Confirm which repo owns the table before writing a migration** — never duplicate schema changes across repos.
+Migration tool, command and owner repo: `AGENTS.md`, or find them in the repo. **Confirm which repo owns the table before writing a migration** — never duplicate schema changes across repos.
 
 ## Workflow
 1. Change the ORM model.
-2. Generate: `alembic revision --autogenerate -m "<verb>_<object>"` (run inside the project's container/env, against a **disposable** DB, not shared/prod).
+2. Generate: `alembic revision --autogenerate -m "add_item_status"` (run inside the project's container/env, against a **disposable** DB, not shared/prod).
 3. **Read the file.** Autogenerate misses: renames (shows drop+add), server defaults, enum changes, check constraints, index/FK names. Fix by hand.
 4. Test `upgrade head` → `downgrade -1` → `upgrade head` on a copy with realistic data.
 5. Commit model + migration together. One logical change per revision; linear history (resolve multiple heads by merge).

@@ -1,18 +1,16 @@
 ---
 name: fastapi-patterns
-description: Code patterns for layered FastAPI (async or sync): route + dependency factory, service, repository, Pydantic v2 schemas, typed errors. Project-agnostic; reads Project bindings from CLAUDE.md. Use when writing or reviewing FastAPI code and you need the exact shape to copy; for a full new feature use fastapi-new-feature.
+description: "Code patterns for layered FastAPI (async or sync): route + dependency factory, service, repository, Pydantic v2 schemas, typed errors. Use when writing or reviewing FastAPI code and you need the exact shape to copy; for a full new feature use fastapi-new-feature."
 ---
 
 # FastAPI patterns (generic)
 
 Principles live in `.claude/rules/fastapi-*.md`. This skill = code shapes to copy.
-**First** read repo `CLAUDE.md` → *Project bindings* (paths, `AUTH_DEP`, `SESSION_DEP`, `RESPONSE_HELPER`, exceptions, logger). Mirror the closest existing feature. Names below are placeholders.
+**First** read the project's `AGENTS.md` for paths, the auth and session dependencies, the response helper, exceptions and logger, and mirror the closest existing feature. Names below are examples. If `AGENTS.md` has no FastAPI facts, run `fastapi-bootstrap` first.
 
-If bindings are missing, run `fastapi-bootstrap` first.
-
-## 1. Layout (typical; real map is in bindings)
+## 1. Layout (typical; the project's real map wins)
 ```
-<app>/
+app/
 ├── main.py                      # app, lifespan, exception handlers, router include
 ├── presentation/ (api)          # controllers/routes, request/response schemas, deps (auth)
 ├── application/ (services)      # services, DTOs, repository interfaces
@@ -24,68 +22,68 @@ Direction: `presentation → application → domain ← infrastructure`.
 
 ## 2. Route + DI factory
 ```python
-router = APIRouter(prefix="/v1/<resources>", tags=["<resources>"])
+router = APIRouter(prefix="/v1/items", tags=["items"])
 
-def get_service(session: Annotated[AsyncSession, Depends(<SESSION_DEP>)]) -> <Feature>Service:
-    return <Feature>Service(<Entity>Repository(session))      # thin factory
+def get_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ItemService:
+    return ItemService(ItemRepository(session))      # thin factory
 
 # Plain model as response_model:
-@router.get("/{item_id}", response_model=<Item>Response, status_code=200, summary="Get <item>")
+@router.get("/{item_id}", response_model=ItemResponse, status_code=200, summary="Get item")
 async def get_item(
     item_id: int,
-    principal: Annotated[<Principal>, Depends(<AUTH_DEP>)],
-    service: Annotated[<Feature>Service, Depends(get_service)],
+    principal: Annotated[Principal, Depends(get_current_user)],
+    service: Annotated[ItemService, Depends(get_service)],
 ):
     return await service.get(item_id, owner_id=principal.user_id)
 
-# If the project wraps responses in an envelope (<RESPONSE_HELPER>), follow it instead and
-# declare the envelope type (e.g. ApiResponse[<Item>Response]) or omit response_model —
+# If the project wraps responses in an envelope (a response helper), follow it instead and
+# declare the envelope type (e.g. ApiResponse[ItemResponse]) or omit response_model —
 # never declare a model the route doesn't return.
 ```
 Class-based controllers are fine if the repo uses them — follow the repo.
 
 ## 3. Service (framework-free)
 ```python
-class <Feature>Service:
-    def __init__(self, repo: <Entity>RepositoryInterface) -> None:
+class ItemService:
+    def __init__(self, repo: ItemRepositoryInterface) -> None:
         self._repo = repo
 
-    async def get(self, item_id: int, owner_id: int) -> <Item>DTO:
+    async def get(self, item_id: int, owner_id: int) -> ItemDTO:
         entity = await self._repo.get_by_id_for_owner(item_id, owner_id)
         if entity is None:
             raise NotFoundException(...)
-        return <Item>DTO.model_validate(entity)
+        return ItemDTO.model_validate(entity)
 ```
 
 ## 4. Repository
 ```python
-class <Entity>Repository(<Entity>RepositoryInterface):
+class ItemRepository(ItemRepositoryInterface):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, entity: <Entity>) -> <Entity>:
+    async def create(self, entity: Item) -> Item:
         try:
             self.session.add(entity)
             await self.session.flush()          # commit owned by session dependency
             return entity
         except SQLAlchemyError as e:
-            <LOGGER>(f"<Entity>Repository.create failed: {e}")
+            logger.error(f"ItemRepository.create failed: {e}")
             raise
 ```
-Details: `sqlalchemy` skill.
+Details: `fastapi-sqlalchemy` skill.
 
 ## 5. Schemas (Pydantic v2)
 ```python
-class <Item>Create(BaseModel):
+class ItemCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: Annotated[str, Field(min_length=1, max_length=100)]
 
-class <Item>Update(BaseModel):
+class ItemUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: Annotated[str | None, Field(min_length=1, max_length=100)] = None
 # patch: data = body.model_dump(exclude_unset=True)
 
-class <Item>Response(BaseModel):
+class ItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str

@@ -1,11 +1,11 @@
 ---
 name: fastapi-review
-description: Checklist review of FastAPI changes (architecture, API contract, DB, security, tests, ops), async or sync. Project-agnostic; works on a diff, branch or file. Use whenever the user asks to review, audit or sanity-check FastAPI code or a PR, or before merging FastAPI changes.
+description: "Checklist review of FastAPI changes (architecture, API contract, DB, security, tests, ops), async or sync. Works on a diff, branch or file. Use whenever the user asks to review, audit or sanity-check FastAPI code or a PR, or before merging FastAPI changes."
 ---
 
 # FastAPI review
 
-1. Load repo **Project bindings** (`CLAUDE.md`) + `.claude/rules/fastapi-*.md`.
+1. Read `.claude/rules/fastapi-*.md` and the project's `AGENTS.md`.
 2. Get diff: given PR/range, else `git diff <default-branch>...HEAD` (single commit: `git show HEAD`). Tiny diff (config/const/copy): skip N/A checklist sections; still ask "does this change behavior for all callers?" and "is there a test?". Read changed files **in full context**, not just hunks.
 3. Walk checklist. Report only real findings, one line each:
    `path:line: <severity> — problem. fix.` Severity: **BLOCKER** (bug/security/data loss) · **MAJOR** · **MINOR** · **NIT**. Skip pure style that formatter catches.

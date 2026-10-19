@@ -1,26 +1,26 @@
 ---
-name: security
-description: Security guardrails for FastAPI APIs: auth dependency coverage, IDOR/ownership scope, mass-assignment, error disclosure, log sanitization, injection, upload validation, secrets, SSRF. Project-agnostic. Use whenever implementing or reviewing routes, auth, repositories, logging or file upload in a FastAPI repo. Generic set; project variants (e.g. `security-and-hardening`) add repo details — bindings/CLAUDE.md win on conflict.
+name: fastapi-security
+description: "Security guardrails for FastAPI APIs: auth dependency coverage, IDOR and ownership scope, mass assignment, error disclosure, log sanitization, injection, upload validation, secrets and SSRF. Use whenever implementing or reviewing routes, auth, repositories, logging or file upload in a FastAPI repo."
 ---
 
 # FastAPI security (generic)
 
-Rules: `.claude/rules/fastapi-security.md`. Auth dep, exception types, logger: *Project bindings* in `CLAUDE.md`.
+Rules: `.claude/rules/fastapi-security.md`. Auth dependency, exception types and logger: take them from the project's `AGENTS.md` or code; names below are examples.
 
 ## 1. Auth: deny by default
 - Token from `Authorization: Bearer` (`HTTPBearer`), not query/cookie unless designed so.
 - Verify only in one auth-dependency module; no `jwt.decode` in controllers/services.
-- Every route has `Depends(<AUTH_DEP>)`. Public route → code comment with reason.
+- Every route has `Depends(get_current_user)`. Public route → code comment with reason.
 - Validate `exp`, `iss`/`aud` if used, algorithm pinned (never accept `none`); short access-token TTL. Require claims, e.g. PyJWT: `jwt.decode(tok, key, algorithms=["HS256"], options={"require": ["exp", "sub"]})`. Prefer maintained libs (PyJWT/authlib) over `python-jose`.
 
 ```python
 # BAD: no auth
 @router.get("/v1/items/{id}")
-async def get_item(id: int, session=Depends(<SESSION_DEP>)): ...
+async def get_item(id: int, session=Depends(get_session)): ...
 
 # GOOD
 @router.get("/v1/items/{id}")
-async def get_item(id: int, principal=Depends(<AUTH_DEP>), service=Depends(get_service)): ...
+async def get_item(id: int, principal=Depends(get_current_user), service=Depends(get_service)): ...
 ```
 Role-gated routes: dedicated dependency (`require_role("admin")`), not inline `if`.
 
@@ -40,7 +40,7 @@ Global content (shared lessons, notifications) has no owner: that's fine, but ad
 ## 3. Mass assignment
 ```python
 # BAD
-entity = <Entity>(**request_dict)
+entity = Item(**request_dict)
 # GOOD: explicit schema (extra="forbid"), set fields by name; server sets owner_id, role, status
 ```
 
@@ -51,7 +51,7 @@ except Exception as e:
     return JSONResponse({"error": str(e)}, status_code=500)
 # GOOD
 except SQLAlchemyError as e:
-    <LOGGER>(f"<feature>.<action> failed: {e}")
+    logger.error(f"items.create failed: {e}")
     raise InternalServerErrorException(...) from e
 ```
 No stack traces, SQL, hostnames, or raw exception text to clients. Unknown exceptions → global handler → generic 500.

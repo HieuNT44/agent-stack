@@ -1,13 +1,13 @@
 ---
 name: fastapi-debugging
-description: Triage guide for FastAPI/SQLAlchemy failures: 500s, 401/403/422, MissingGreenlet, un-awaited coroutines, dirty sessions, blocked event loop, pool exhaustion, CORS. Reproduce-with-test first. Project-agnostic. Use whenever a FastAPI route errors, hangs, returns the wrong status/shape, or a test fails mysteriously, even if the user just pastes a traceback.
+description: "Triage guide for FastAPI/SQLAlchemy failures: 500s, 401/403/422, MissingGreenlet, un-awaited coroutines, dirty sessions, blocked event loop, pool exhaustion, CORS. Reproduce-with-test first. Use whenever a FastAPI route errors, hangs, returns the wrong status/shape, or a test fails mysteriously, even if the user just pastes a traceback."
 ---
 
 # FastAPI debugging
 
 ## Loop
 1. **Reproduce** — exact request (method, path, body, auth). Write a failing test if feasible (`fastapi-testing`).
-2. **Read the log** (where logs go + how to read them: `RUN_CMD`/container name in bindings; Docker repos: `docker logs <container>`; note which exceptions the project's error decorator/handler logs and which fall to the global handler) — app/container logs around the request id; get the *first* traceback, not the last.
+2. **Read the log** (where logs go + how to read them: run command and container name are in `AGENTS.md` or docker-compose; Docker repos: `docker logs <service>`; note which exceptions the project's error decorator/handler logs and which fall to the global handler) — app/container logs around the request id; get the *first* traceback, not the last.
 3. **Localize layer** — request parse (422) → auth dep (401/403) → service → repo/DB → response serialization → handler.
 4. **Hypothesis → one change → re-run.** Don't stack speculative fixes.
 5. Fix root cause, keep the regression test.

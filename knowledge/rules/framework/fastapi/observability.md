@@ -1,6 +1,6 @@
 ---
 description: FastAPI logging, request tracing and health endpoints
-paths: ["**/*.py"]
+paths: ["**/main.py", "**/middleware/**/*.py", "**/logging*.py", "**/logger*.py", "**/health*.py"]
 ---
 # Observability
 

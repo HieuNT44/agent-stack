@@ -1,10 +1,10 @@
 ---
 description: FastAPI auth, authorization, input and secret handling
-paths: ["**/*.py"]
+paths: ["**/auth/**/*.py", "**/security*.py", "**/deps*.py", "**/dependencies*.py", "**/routers/**/*.py", "**/routes/**/*.py", "**/api/**/*.py", "**/main.py", "**/config*.py", "**/settings*.py"]
 ---
 # FastAPI security
 
-- **Deny by default**: every route needs an auth dependency; public routes need an explicit code comment saying why. Enforce structurally: `APIRouter(dependencies=[Depends(AUTH_DEP)])` per router + a test that walks `app.routes` and fails if a route lacks it and isn't on a public allowlist.
+- **Deny by default**: every route needs an auth dependency; public routes need an explicit code comment saying why. Enforce structurally: `APIRouter(dependencies=[Depends(get_current_user)])` per router + a test that walks `app.routes` and fails if a route lacks it and isn't on a public allowlist.
 - Token verification lives in one dependency module. No ad-hoc `jwt.decode` elsewhere.
 - **AuthZ/IDOR**: every resource lookup scoped by the authenticated principal (`WHERE id=:id AND owner_id=:me`). Never trust ids from body/path as ownership proof.
 - Per-user data → owner-scoped. Genuinely global data (shared content) → comment it explicitly.
