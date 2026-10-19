@@ -242,6 +242,28 @@ describe('selection', () => {
   });
 });
 
+describe('the fastapi framework', () => {
+  it('is selected from --framework alone, with its rules and skills', async () => {
+    const { selection, report } = await run('fastapi');
+    expect(report.ok).toBe(true);
+    const rules = selection.rules.map((entry) => entry.artifact.meta.id);
+    const skills = selection.skills.map((entry) => entry.artifact.meta.id);
+    expect(rules).toContain('fastapi-architecture');
+    expect(rules).toContain('fastapi-async-db');
+    expect(skills).toContain('fastapi-new-feature');
+    expect(skills).toContain('fastapi-bootstrap');
+  });
+
+  it('names no rule or skill twice, so no output is a fastapi-fastapi duplicate', async () => {
+    const { selection } = await run('fastapi');
+    for (const entries of [selection.rules, selection.skills]) {
+      const ids = entries.map((entry) => entry.artifact.meta.id);
+      expect(ids.filter((id) => id.startsWith('fastapi-fastapi'))).toEqual([]);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+});
+
 describe('validation', () => {
   it('blocks when no framework was given', async () => {
     const { report } = await run();
