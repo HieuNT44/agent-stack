@@ -126,8 +126,14 @@ technologies:
   laravel:
     name: Laravel
 
+  fastapi:
+    name: FastAPI
+
   react:
     name: React
+
+  vue:
+    name: Vue
 ```
 
 | Trường | Ý nghĩa |
@@ -146,7 +152,9 @@ fail. `agent-stack catalog` in ra mỗi framework có gì, để thấy ngay ch�
   ├─────────┼───────────────┼───────┼────────┼──────────┤
   │ rails   │ Ruby on Rails │     3 │     29 │        9 │
   │ laravel │ Laravel       │     6 │     30 │        9 │
+  │ fastapi │ FastAPI       │     9 │     36 │        9 │
   │ react   │ React         │     7 │     30 │        9 │
+  │ vue     │ Vue           │     6 │     30 │        9 │
   └─────────┴───────────────┴───────┴────────┴──────────┘
 ```
 

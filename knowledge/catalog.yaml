@@ -22,5 +22,11 @@ technologies:
   laravel:
     name: Laravel
 
+  fastapi:
+    name: FastAPI
+
   react:
     name: React
+
+  vue:
+    name: Vue

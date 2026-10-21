@@ -258,6 +258,26 @@ describe('selection', () => {
     expect(report.ok).toBe(true);
   });
 
+  it('selects the Vue layer from the framework alone', async () => {
+    const { stack, selection, report } = await run('vue');
+    expect(stack.technologies.map((tech) => tech.id)).toEqual(['vue']);
+
+    expect(selection.rules.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining([
+        'vue-accessibility',
+        'vue-components',
+        'vue-conventions',
+        'vue-security',
+        'vue-state',
+        'vue-testing',
+      ]),
+    );
+    expect(selection.skills.map((entry) => entry.artifact.meta.id)).toEqual(
+      expect.arrayContaining(['vue-component', 'vue-form', 'vue-infer-conventions', 'vue-verify']),
+    );
+    expect(report.ok).toBe(true);
+  });
+
   it("leaves another framework's content out", async () => {
     const { selection } = await run('laravel');
     const ids = selection.rules.map((entry) => entry.artifact.meta.id);
@@ -265,6 +285,28 @@ describe('selection', () => {
     expect(selection.skipped.map((entry) => entry.artifact.meta.id)).toContain(
       'rails-conventions',
     );
+  });
+});
+
+describe('the fastapi framework', () => {
+  it('is selected from --framework alone, with its rules and skills', async () => {
+    const { selection, report } = await run('fastapi');
+    expect(report.ok).toBe(true);
+    const rules = selection.rules.map((entry) => entry.artifact.meta.id);
+    const skills = selection.skills.map((entry) => entry.artifact.meta.id);
+    expect(rules).toContain('fastapi-architecture');
+    expect(rules).toContain('fastapi-async-db');
+    expect(skills).toContain('fastapi-new-feature');
+    expect(skills).toContain('fastapi-bootstrap');
+  });
+
+  it('names no rule or skill twice, so no output is a fastapi-fastapi duplicate', async () => {
+    const { selection } = await run('fastapi');
+    for (const entries of [selection.rules, selection.skills]) {
+      const ids = entries.map((entry) => entry.artifact.meta.id);
+      expect(ids.filter((id) => id.startsWith('fastapi-fastapi'))).toEqual([]);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
   });
 });
 
