@@ -61,6 +61,7 @@ Not in the checklist (skip): pure formatting (Prettier/Biome handles it), anythi
 | T4 | **Network mocking**: MSW (where handlers live) / mocked API module | `src/mocks`, `vi.mock(` |
 | T5 | **Test location and naming**: beside the file / `__tests__` / `tests/`; `describe`/`it` style | `ls`; read 3 tests |
 | T6 | **E2E tool and how it runs** (Playwright, Cypress; against which server) | `e2e/`, config files, CI |
+| T7 | **Selectors**: role queries / `data-testid` / `data-test` | grep `data-testid\|data-test`; read 3 tests |
 
 ## → react-accessibility.md
 
