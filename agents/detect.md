@@ -21,8 +21,9 @@ flag and no catalog entry for any of them. Versions are not part of the input ei
 - **Never write a rule, skill or command file yourself**, and never invent content the
   knowledge base does not contain. The CLI decides what is generated; you decide
   nothing about content.
-- **Never guess the framework.** A repository that uses neither Rails nor Laravel has
-  no framework in the catalog: say so rather than picking the nearest id.
+- **Never guess the framework.** A repository built on none of the catalog's
+  frameworks has no framework to select: say so rather than picking the nearest id.
+  Django is not `fastapi`, and Svelte is neither `react` nor `vue`.
 - **Never resolve a conflict on your own.** That is the operator's call, always.
 - Never clone or download anything. The knowledge base ships with the plugin.
 
@@ -42,21 +43,41 @@ names the near miss and lists every framework on offer; relay it rather than gue
 Look for these. Stop as soon as the framework is settled; you are not auditing the
 repository.
 
-| Signal | Tells you |
+| File | Dependency that settles it | Framework |
+| --- | --- | --- |
+| `Gemfile.lock` / `Gemfile` | `rails` | `rails` |
+| `composer.lock` / `composer.json` | `laravel/framework` | `laravel` |
+| `pyproject.toml`, `requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile` | `fastapi` | `fastapi` |
+| `package.json` — `dependencies` or `devDependencies` | `react` | `react` |
+| `package.json` — `dependencies` or `devDependencies` | `vue` | `vue` |
+
+When no manifest is committed, layout is weaker evidence:
+
+| Layout | Framework |
 | --- | --- |
-| `Gemfile.lock` / `Gemfile` | `rails` |
-| `composer.lock` / `composer.json` | `laravel/framework` |
-| `config/routes.rb`, `app/controllers/`, `bin/rails` | Rails, when no lockfile is committed |
-| `artisan`, `routes/web.php`, `app/Http/Controllers/` | Laravel, when no lockfile is committed |
+| `config/routes.rb`, `app/controllers/`, `bin/rails` | `rails` |
+| `artisan`, `routes/web.php`, `app/Http/Controllers/` | `laravel` |
+| `from fastapi import` in a `.py` file, e.g. `main.py` or `app/main.py` | `fastapi` |
+| `.jsx` / `.tsx` components, `src/App.jsx` / `src/App.tsx` | `react` |
+| `.vue` single-file components | `vue` |
 
 **A dependency entry beats a directory layout.** A `laravel/framework` line in
 `composer.json` is evidence; a directory that merely looks Laravel-shaped is weaker.
 
+**For JavaScript, read `package.json`, not the lockfile.** `package-lock.json`,
+`yarn.lock` and `pnpm-lock.yaml` list transitive packages too, so a `react` entry there
+can belong to some tool's dependency rather than to the project. A meta-framework
+counts as its base: Next.js or Remix is `react`, Nuxt is `vue`. In a monorepo, read
+the `package.json` of each app, not only the root one.
+
+A `.tsx` file is not proof of React on its own — other libraries use JSX too. Without
+`react` in a `package.json`, that is *uncertain*.
+
 Do not read versions, and do not go looking for the database, cache or deploy target:
 none of them is an input, and time spent on them is noise in the report.
 
-A repository can hold more than one application — a Rails API beside a Laravel admin.
-That is two frameworks, not an ambiguity: pass `--framework` twice, once the operator
+A repository can hold more than one application — a FastAPI backend beside a React
+frontend, or a Rails API beside a Vue admin. That is two frameworks, not an ambiguity: pass `--framework` twice, once the operator
 confirms both are in scope for this `.claude` directory.
 
 ## 3. Confirm before generating

@@ -74,9 +74,11 @@ Không cần Claude Code, không cần API key, không gọi network: knowledge 
 ```bash
 agent-stack catalog                     # knowledge base đang có gì
 agent-stack generate --framework rails  # xem trước, không ghi
-agent-stack generate --framework rails --framework laravel --write
+agent-stack generate --framework fastapi --framework react --write  # backend + frontend
 agent-stack --help
 ```
+
+Framework đang có: `rails`, `laravel`, `fastapi`, `react`, `vue`.
 
 Không có `--write` thì không file nào bị ghi. Ở terminal tương tác, lần ghi nào cũng qua checklist duyệt trước — `--yes` bỏ qua checklist, `--json` cho máy đọc.
 
@@ -208,7 +210,7 @@ Không có terminal — `--json`, CI, hay gọi qua slash command — thì check
 | `/agent-stack:catalog` | Liệt kê technology, rule, skill và command knowledge base đang phủ — và cả chỗ còn trống | — |
 | agent `detect` | Đọc repo để tự suy ra stack, đưa bảng cho bạn duyệt, rồi chạy tiếp đúng luồng `/agent-stack:generate` | Agent suy ra, bạn duyệt |
 
-`detect` đọc `Gemfile.lock`, `composer.lock`, `composer.json`, và cấu trúc thư mục khi không có lockfile nào được commit. Nó chỉ đi tìm **một thứ**: framework — ngôn ngữ, database, cache và hạ tầng không phải đầu vào, đọc thêm về chúng chỉ là nhiễu. Kết quả gắn nhãn `found` (có tên trong manifest hoặc lockfile), `uncertain` (chỉ suy từ cấu trúc thư mục) hay `missing`; không phải `found` thì phải hỏi lại bạn trước khi generate. Nó chạy trong subagent để việc đọc cả chục file manifest không đổ vào context chính.
+`detect` đọc manifest và lockfile — `Gemfile.lock`, `composer.json`, `pyproject.toml` hay `requirements.txt`, `package.json` — và chỉ xét cấu trúc thư mục khi không có manifest nào được commit. Với JavaScript nó đọc `package.json` chứ không đọc lockfile, vì lockfile liệt kê cả dependency gián tiếp; Next.js tính là `react`, Nuxt tính là `vue`. Nó chỉ đi tìm **một thứ**: framework — ngôn ngữ, database, cache và hạ tầng không phải đầu vào, đọc thêm về chúng chỉ là nhiễu. Kết quả gắn nhãn `found` (có tên trong manifest hoặc lockfile), `uncertain` (chỉ suy từ cấu trúc thư mục) hay `missing`; không phải `found` thì phải hỏi lại bạn trước khi generate. Nó chạy trong subagent để việc đọc cả chục file manifest không đổ vào context chính.
 
 ## Tham chiếu CLI
 
@@ -333,6 +335,7 @@ Mỗi module một mối quan tâm. Sửa gì thì đặt vào đúng chỗ mố
 | `validator.ts` | Các phát hiện về tính đầy đủ và nhất quán |
 | `prompt.ts` | Checklist duyệt trên terminal, và không gì khác |
 | `emit.ts` | Module **duy nhất** được ghi hoặc xoá; cả việc seed `AGENTS.md` và gỡ block `CLAUDE.md` cũ |
+| `table.ts` | Bảng kẻ khung cho output dành cho người, và không gì khác |
 | `cli.ts` | Cờ dòng lệnh, output cho người và `--json` |
 
 > [!CAUTION]
