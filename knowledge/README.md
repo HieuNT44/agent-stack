@@ -141,7 +141,7 @@ fail. `agent-stack catalog` in ra mỗi framework có gì, để thấy ngay ch�
   ┌─────────┬───────────────┬───────┬────────┬──────────┐
   │ id      │ name          │ rules │ skills │ commands │
   ├─────────┼───────────────┼───────┼────────┼──────────┤
-  │ rails   │ Ruby on Rails │     3 │     29 │        9 │
+  │ rails   │ Ruby on Rails │    29 │     30 │        9 │
   │ laravel │ Laravel       │     6 │     30 │        9 │
   └─────────┴───────────────┴───────┴────────┴──────────┘
 ```
