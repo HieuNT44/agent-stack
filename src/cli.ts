@@ -230,8 +230,9 @@ async function run(options: Options): Promise<number> {
     const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
     for (const source of kb.imported) {
       const count = all.filter((a) => a.provenance?.source === source.name).length;
+      const support = kb.support.filter((a) => a.provenance?.source === source.name).length;
       process.stdout.write(
-        `Imported: ${source.name} ${count} artifact(s) from ${source.repo} at ${source.ref.slice(0, 7)} (${source.license})\n`,
+        `Imported: ${source.name} ${count} artifact(s) and ${support} support file(s) from ${source.repo} at ${source.ref.slice(0, 7)} (${source.license})\n`,
       );
     }
     return 0;
@@ -474,6 +475,7 @@ function summarize(selection: ReturnType<typeof selectArtifacts>) {
     skills: describe(selection.skills),
     commands: describe(selection.commands),
     agentMd: describe(selection.agentMd),
+    support: describe(selection.support),
     skipped: selection.skipped.map((entry) => ({
       id: entry.artifact.meta.id,
       reason: entry.reason,
@@ -484,7 +486,7 @@ function summarize(selection: ReturnType<typeof selectArtifacts>) {
 function printReport(report: ReturnType<typeof validate>): void {
   const { counts } = report;
   process.stdout.write(
-    `\nSelected ${counts.rules} rule(s), ${counts.skills} skill(s), ${counts.commands} command(s) and ${counts.agentMd} AGENTS.md template(s) for ${counts.technologies} framework(s).\n`,
+    `\nSelected ${counts.rules} rule(s), ${counts.skills} skill(s), ${counts.commands} command(s), ${counts.support} support file(s) and ${counts.agentMd} AGENTS.md template(s) for ${counts.technologies} framework(s).\n`,
   );
   const errors = report.findings.filter((f) => f.severity === 'error');
   const warnings = report.findings.filter((f) => f.severity === 'warning');

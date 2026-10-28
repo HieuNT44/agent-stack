@@ -22,6 +22,8 @@ export interface Selection {
    * choice: they would all claim the same file.
    */
   agentMd: SelectedArtifact[];
+  /** Files imported content needs; present only while their source is. */
+  support: SelectedArtifact[];
   skipped: SkippedArtifact[];
   /** Selected technologies with no artifact covering them at all. */
   uncovered: ResolvedTech[];
@@ -50,9 +52,29 @@ function matches(artifact: Artifact, stack: ResolvedStack): MatchResult {
   return { ok: true, matchedBy };
 }
 
+/**
+ * Split support files by whether anything else from their source is in the
+ * selection. They exist only for that source's skills and commands, so with
+ * none of those written they would be files nothing reads.
+ */
+function supportInUse(
+  support: SelectedArtifact[],
+  others: SelectedArtifact[],
+): { kept: SelectedArtifact[]; unused: SkippedArtifact[] } {
+  const used = new Set(others.map((entry) => entry.artifact.provenance?.source));
+  const kept: SelectedArtifact[] = [];
+  const unused: SkippedArtifact[] = [];
+  for (const entry of support) {
+    const source = entry.artifact.provenance?.source;
+    if (used.has(source)) kept.push(entry);
+    else unused.push({ artifact: entry.artifact, reason: `nothing from ${source} is written` });
+  }
+  return { kept, unused };
+}
+
 /** Choose the rules and skills that cover the resolved stack. */
 export function selectArtifacts(kb: KnowledgeBase, stack: ResolvedStack): Selection {
-  const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
+  const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd, ...kb.support];
 
   const selected = new Map<string, SelectedArtifact>();
   const skipped: SkippedArtifact[] = [];
@@ -77,12 +99,23 @@ export function selectArtifacts(kb: KnowledgeBase, stack: ResolvedStack): Select
   const order = (a: SelectedArtifact, b: SelectedArtifact): number =>
     a.artifact.meta.id.localeCompare(b.artifact.meta.id);
 
+  const ofType = (type: string) =>
+    [...selected.values()].filter((e) => e.artifact.meta.type === type).sort(order);
+  const rules = ofType('rule');
+  const skills = ofType('skill');
+  const commands = ofType('command');
+  const agentMd = ofType('agent-md');
+  const support = supportInUse(ofType('support'), [...rules, ...skills, ...commands, ...agentMd]);
+
   return {
-    rules: [...selected.values()].filter((e) => e.artifact.meta.type === 'rule').sort(order),
-    skills: [...selected.values()].filter((e) => e.artifact.meta.type === 'skill').sort(order),
-    commands: [...selected.values()].filter((e) => e.artifact.meta.type === 'command').sort(order),
-    agentMd: [...selected.values()].filter((e) => e.artifact.meta.type === 'agent-md').sort(order),
-    skipped: skipped.sort((a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id)),
+    rules,
+    skills,
+    commands,
+    agentMd,
+    support: support.kept,
+    skipped: [...skipped, ...support.unused].sort((a, b) =>
+      a.artifact.meta.id.localeCompare(b.artifact.meta.id),
+    ),
     uncovered,
   };
 }
@@ -124,6 +157,9 @@ export function excludeArtifacts(
   const skills = keep(selection.skills);
   const commands = keep(selection.commands);
   const agentMd = keep(selection.agentMd);
+  // A support file goes when the operator drops it, and when everything of its
+  // source has been dropped: it would be written for nothing.
+  const support = supportInUse(keep(selection.support), [...rules, ...skills, ...commands, ...agentMd]);
 
   const covered = new Set(
     [...rules, ...skills, ...commands, ...agentMd].flatMap(
@@ -136,12 +172,15 @@ export function excludeArtifacts(
     skills,
     commands,
     agentMd,
+    support: support.kept,
     skipped: [
       ...selection.skipped,
       ...dropped(selection.rules),
       ...dropped(selection.skills),
       ...dropped(selection.commands),
       ...dropped(selection.agentMd),
+      ...dropped(selection.support),
+      ...support.unused,
     ].sort((a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id)),
     uncovered: stack.technologies.filter((tech) => !covered.has(tech.id)),
   };

@@ -23,6 +23,11 @@ export interface Manifest {
   rules: { id: string; path: string }[];
   skills: { id: string; path: string }[];
   commands: { id: string; path: string }[];
+  /**
+   * Files imported content needs outside its own directory. Absent from a
+   * manifest written before support files existed.
+   */
+  support: { id: string; path: string }[];
   /** Other generated paths this run owns, e.g. third-party licence notices. */
   extras: string[];
   /**
@@ -74,6 +79,13 @@ function skillDir(entry: SelectedArtifact): string {
 
 function commandPath(entry: SelectedArtifact): string {
   return posix.join('.claude', 'commands', `${entry.artifact.meta.id}.md`);
+}
+
+/** A support file lands where upstream.yaml declared, which the loader recorded. */
+function supportPath(entry: SelectedArtifact): string {
+  const { target, source } = entry.artifact;
+  if (target === undefined) throw new Error(`${source}: a support file without a target`);
+  return target;
 }
 
 /**
@@ -131,6 +143,12 @@ export function compose(
     commandEntries.push({ id: entry.artifact.meta.id, path: commandPath(entry) });
   }
 
+  const supportEntries: { id: string; path: string }[] = [];
+  for (const entry of selection.support) {
+    files.push({ path: supportPath(entry), copyFrom: entry.artifact.path });
+    supportEntries.push({ id: entry.artifact.meta.id, path: supportPath(entry) });
+  }
+
   const usedSources = new Set(
     [
       ...selection.rules,
@@ -150,6 +168,7 @@ export function compose(
     rules: ruleEntries.map(({ id, path }) => ({ id, path })),
     skills: skillEntries,
     commands: commandEntries,
+    support: supportEntries,
     extras: [],
     imported: used.map(({ name, repo, ref, license, licenseUrl, copyright }) => ({
       source: name,
@@ -206,6 +225,11 @@ export function artifactTargets(selection: Selection): ArtifactTarget[] {
     ...selection.agentMd.map((entry) => ({
       id: entry.artifact.meta.id,
       type: 'agent-md' as const,
+    })),
+    ...selection.support.map((entry) => ({
+      id: entry.artifact.meta.id,
+      type: 'support' as const,
+      path: supportPath(entry),
     })),
   ];
 }

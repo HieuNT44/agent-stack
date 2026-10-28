@@ -37,12 +37,13 @@ export type PickerKey =
   | 'confirm'
   | 'cancel';
 
-const TYPE_ORDER: ArtifactType[] = ['rule', 'skill', 'command', 'agent-md'];
+const TYPE_ORDER: ArtifactType[] = ['rule', 'skill', 'command', 'support', 'agent-md'];
 
 const TYPE_LABEL: Record<ArtifactType, string> = {
   rule: 'Rules',
   skill: 'Skills',
   command: 'Commands',
+  support: 'Support files (agents and references imported skills and commands use)',
   'agent-md': 'AGENTS.md template (written only if absent)',
 };
 

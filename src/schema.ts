@@ -14,8 +14,12 @@ export type Layer = (typeof LAYERS)[number];
  * `agent-md` is copied like the rest, but only once: it seeds the project's
  * AGENTS.md, a template the team fills in. From then on the file is the
  * project's, so it is never replaced, never removed and carries no checksum.
+ *
+ * `support` is a file an imported skill or command reaches outside its own
+ * directory. It is declared in upstream.yaml rather than derived from a type
+ * directory, and is written only while something from its source is.
  */
-export const ARTIFACT_TYPES = ['rule', 'skill', 'command', 'agent-md'] as const;
+export const ARTIFACT_TYPES = ['rule', 'skill', 'command', 'agent-md', 'support'] as const;
 
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
 

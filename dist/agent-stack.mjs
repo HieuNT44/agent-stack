@@ -7376,8 +7376,8 @@ import { dirname as dirname3, isAbsolute, resolve } from "node:path";
 
 // src/catalog.ts
 var import_yaml2 = __toESM(require_dist(), 1);
-import { readdir, readFile as readFile2 } from "node:fs/promises";
-import { basename, dirname, join as join2, relative, sep } from "node:path";
+import { readdir, readFile as readFile2, stat } from "node:fs/promises";
+import { basename, dirname, join as join2, posix as posix2, relative, sep } from "node:path";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11448,7 +11448,15 @@ function isValidId(value) {
 // src/upstream.ts
 var import_yaml = __toESM(require_dist(), 1);
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, posix } from "node:path";
+var RESERVED = [".claude/rules", ".claude/skills", ".claude/commands", ".claude/agent-stack-manifest.json"];
+var supportTarget = external_exports.string().refine(
+  (target) => target.startsWith(".claude/") && posix.normalize(target) === target && !target.split("/").includes(".."),
+  "a support target is a plain path under .claude/"
+).refine(
+  (target) => !RESERVED.some((path) => target === path || target.startsWith(`${path}/`)),
+  "a support target cannot land where rules, skills, commands or the manifest are written"
+);
 var upstreamSourceSchema = external_exports.object({
   repo: external_exports.string().url().startsWith("https://"),
   /** Full 40-character commit SHA. A branch or tag is rejected: the copy must be traceable. */
@@ -11458,12 +11466,23 @@ var upstreamSourceSchema = external_exports.object({
   license_url: external_exports.string().url(),
   copyright: external_exports.string().min(1),
   /** Upstream path -> path under knowledge/. The targets mark which artifacts are imported. */
-  copy: external_exports.record(external_exports.string().min(1), external_exports.string().min(1))
+  copy: external_exports.record(external_exports.string().min(1), external_exports.string().min(1)),
+  /**
+   * Upstream path -> where it lands in a generated project. For files the
+   * imported skills and commands reach outside their own directory: personas a
+   * command spawns, references a skill links to. Synced to
+   * `knowledge/support/<source>/<upstream path>`, and emitted only while
+   * something from this source is.
+   */
+  support: external_exports.record(external_exports.string().min(1), supportTarget).default({})
 });
 var upstreamFileSchema = external_exports.object({
   version: external_exports.literal(1),
   sources: external_exports.record(external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/), upstreamSourceSchema)
 });
+function supportDir(source, from) {
+  return posix.join("support", source, from);
+}
 async function loadUpstream(root) {
   const raw = await readFile(join(root, "upstream.yaml"), "utf8").catch(() => void 0);
   if (raw === void 0) return [];
@@ -11474,6 +11493,10 @@ async function loadUpstream(root) {
   }
   const sources = [];
   for (const [name, source] of Object.entries(parsed.data.sources)) {
+    const support = Object.entries(source.support).map(([from, target]) => ({
+      dir: supportDir(name, from),
+      target
+    }));
     sources.push({
       name,
       repo: source.repo,
@@ -11481,7 +11504,8 @@ async function loadUpstream(root) {
       license: source.license,
       licenseUrl: source.license_url,
       copyright: source.copyright,
-      paths: Object.values(source.copy)
+      paths: [...Object.values(source.copy), ...support.map((entry) => entry.dir)],
+      support
     });
   }
   return sources;
@@ -11544,6 +11568,35 @@ async function loadArtifact(path, root, type) {
   const files = type === "skill" ? (await listFiles(dir)).filter((file) => file !== path).map((file) => relative(dir, file)) : [];
   return { meta: metaFromPath(source, type), path, dir, source, files };
 }
+async function loadSupport(root, imported) {
+  const artifacts = [];
+  for (const source of imported) {
+    for (const { dir, target } of source.support) {
+      const base = join2(root, dir);
+      const single = await stat(base).then(
+        (entry) => entry.isFile(),
+        () => false
+      );
+      for (const path of single ? [base] : await listFiles(base)) {
+        const landing = single ? target : posix2.join(target, relative(base, path).split(sep).join("/"));
+        artifacts.push({
+          meta: {
+            id: posix2.relative(".claude", landing),
+            type: "support",
+            layer: "global",
+            applies_to: []
+          },
+          path,
+          dir: dirname(path),
+          source: relative(root, path),
+          files: [],
+          target: landing
+        });
+      }
+    }
+  }
+  return artifacts;
+}
 function attachProvenance(artifacts, imported) {
   for (const artifact of artifacts) {
     const owner = imported.find(
@@ -11581,7 +11634,8 @@ async function loadKnowledgeBase(root) {
   const skills = await collect("skills", "skill", (path) => basename(path) === "SKILL.md");
   const commands = await collect("commands", "command", (path) => path.endsWith(".md"));
   const agentMd = await collect("agent-md", "agent-md", (path) => path.endsWith(".md"));
-  attachProvenance([...rules, ...skills, ...commands, ...agentMd], imported);
+  const support = await loadSupport(root, imported);
+  attachProvenance([...rules, ...skills, ...commands, ...agentMd, ...support], imported);
   const kb = {
     root,
     catalog: catalogParsed.data,
@@ -11589,26 +11643,42 @@ async function loadKnowledgeBase(root) {
     skills,
     commands,
     agentMd,
+    support,
     imported
   };
-  const problems = [...lintKnowledgeBase(kb), ...await unknownDirectories(root)].sort();
+  const problems = [
+    ...lintKnowledgeBase(kb),
+    ...await unknownDirectories(root),
+    ...await supportProblems(root, imported)
+  ].sort();
   if (problems.length > 0) {
     throw new Error(`Knowledge base is inconsistent:
   - ${problems.join("\n  - ")}`);
   }
   return kb;
 }
-var CONTENT_DIRS = ["rules", "skills", "commands", "agent-md"];
+var CONTENT_DIRS = ["rules", "skills", "commands", "agent-md", "support"];
 async function unknownDirectories(root) {
   const entries = await readdir(root, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory() && !CONTENT_DIRS.includes(entry.name)).map(
     (entry) => entry.name === "claude-md" ? `claude-md/: agent-stack no longer writes CLAUDE.md \u2014 put project guidance in an agent-md/ template, or a rule` : `${entry.name}/: not a content directory \u2014 the loader reads only ${CONTENT_DIRS.map((dir) => `${dir}/`).join(", ")}`
   );
 }
+async function supportProblems(root, imported) {
+  const declared = imported.flatMap((source) => source.support.map((entry) => entry.dir));
+  const files = (await listFiles(join2(root, "support"))).map(
+    (path) => relative(root, path).split(sep).join("/")
+  );
+  const covers = (dir, path) => path === dir || path.startsWith(`${dir}/`);
+  return [
+    ...files.filter((path) => !declared.some((dir) => covers(dir, path))).map((path) => `${path}: not declared under support in upstream.yaml \u2014 nothing would emit it`),
+    ...declared.filter((dir) => !files.some((path) => covers(dir, path))).map((dir) => `${dir}: declared under support in upstream.yaml, but nothing is there \u2014 run npm run sync`)
+  ];
+}
 function lintKnowledgeBase(kb) {
   const problems = [];
   const techIds = new Set(Object.keys(kb.catalog.technologies));
-  const artifacts = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
+  const artifacts = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd, ...kb.support];
   const byId = /* @__PURE__ */ new Map();
   for (const artifact of artifacts) {
     const key = `${artifact.meta.type}:${artifact.meta.id}`;
@@ -11645,19 +11715,24 @@ function lintKnowledgeBase(kb) {
 }
 
 // src/composer.ts
-import { join as join3, posix, sep as sep2 } from "node:path";
-var MANIFEST_PATH = posix.join(".claude", "agent-stack-manifest.json");
+import { join as join3, posix as posix3, sep as sep2 } from "node:path";
+var MANIFEST_PATH = posix3.join(".claude", "agent-stack-manifest.json");
 var BEGIN_MARKER = "<!-- agent-stack:begin - generated by agent-stack, do not edit by hand -->";
 var END_MARKER = "<!-- agent-stack:end -->";
 var AGENTS_MD_PATH = "AGENTS.md";
 function rulePath(entry) {
-  return posix.join(".claude", "rules", `${entry.artifact.meta.id}.md`);
+  return posix3.join(".claude", "rules", `${entry.artifact.meta.id}.md`);
 }
 function skillDir(entry) {
-  return posix.join(".claude", "skills", entry.artifact.meta.id);
+  return posix3.join(".claude", "skills", entry.artifact.meta.id);
 }
 function commandPath(entry) {
-  return posix.join(".claude", "commands", `${entry.artifact.meta.id}.md`);
+  return posix3.join(".claude", "commands", `${entry.artifact.meta.id}.md`);
+}
+function supportPath(entry) {
+  const { target, source } = entry.artifact;
+  if (target === void 0) throw new Error(`${source}: a support file without a target`);
+  return target;
 }
 function withoutManagedBlock(existing) {
   const begin = existing.indexOf(BEGIN_MARKER);
@@ -11679,11 +11754,11 @@ function compose(stack, selection, generatorVersion, imported = []) {
   const skillEntries = [];
   for (const entry of selection.skills) {
     const dir = skillDir(entry);
-    files.push({ path: posix.join(dir, "SKILL.md"), copyFrom: entry.artifact.path });
+    files.push({ path: posix3.join(dir, "SKILL.md"), copyFrom: entry.artifact.path });
     skillEntries.push({ id: entry.artifact.meta.id, path: dir });
     for (const extra of entry.artifact.files) {
       files.push({
-        path: posix.join(dir, extra.split(sep2).join("/")),
+        path: posix3.join(dir, extra.split(sep2).join("/")),
         copyFrom: join3(entry.artifact.dir, extra)
       });
     }
@@ -11692,6 +11767,11 @@ function compose(stack, selection, generatorVersion, imported = []) {
   for (const entry of selection.commands) {
     files.push({ path: commandPath(entry), copyFrom: entry.artifact.path });
     commandEntries.push({ id: entry.artifact.meta.id, path: commandPath(entry) });
+  }
+  const supportEntries = [];
+  for (const entry of selection.support) {
+    files.push({ path: supportPath(entry), copyFrom: entry.artifact.path });
+    supportEntries.push({ id: entry.artifact.meta.id, path: supportPath(entry) });
   }
   const usedSources = new Set(
     [
@@ -11709,6 +11789,7 @@ function compose(stack, selection, generatorVersion, imported = []) {
     rules: ruleEntries.map(({ id, path }) => ({ id, path })),
     skills: skillEntries,
     commands: commandEntries,
+    support: supportEntries,
     extras: [],
     imported: used.map(({ name, repo, ref, license, licenseUrl, copyright }) => ({
       source: name,
@@ -11743,6 +11824,11 @@ function artifactTargets(selection) {
     ...selection.agentMd.map((entry) => ({
       id: entry.artifact.meta.id,
       type: "agent-md"
+    })),
+    ...selection.support.map((entry) => ({
+      id: entry.artifact.meta.id,
+      type: "support",
+      path: supportPath(entry)
     }))
   ];
 }
@@ -11750,8 +11836,8 @@ function artifactTargets(selection) {
 // src/emit.ts
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, mkdir, readdir as readdir2, readFile as readFile3, rm, stat, writeFile } from "node:fs/promises";
-import { dirname as dirname2, join as join4, posix as posix2 } from "node:path";
+import { copyFile, mkdir, readdir as readdir2, readFile as readFile3, rm, stat as stat2, writeFile } from "node:fs/promises";
+import { dirname as dirname2, join as join4, posix as posix4 } from "node:path";
 async function readPreviousManifest(outDir) {
   const raw = await readFile3(join4(outDir, MANIFEST_PATH), "utf8").catch(() => void 0);
   if (!raw) return void 0;
@@ -11769,7 +11855,7 @@ async function filesUnder(root, path) {
   const entries = await readdir2(join4(root, path), { withFileTypes: true }).catch(() => []);
   const files = [];
   for (const entry of entries) {
-    const child = posix2.join(path, entry.name);
+    const child = posix4.join(path, entry.name);
     if (entry.isDirectory()) files.push(...await filesUnder(root, child));
     else if (entry.isFile()) files.push(child);
   }
@@ -11785,7 +11871,7 @@ async function isModified(outDir, previous, path) {
     const actual = await checksum(join4(outDir, file));
     if (actual !== void 0 && actual !== checksums[file]) return true;
   }
-  const isDir = await stat(join4(outDir, path)).then(
+  const isDir = await stat2(join4(outDir, path)).then(
     (entry) => entry.isDirectory(),
     () => false
   );
@@ -11800,6 +11886,7 @@ function ownedPaths(manifest) {
     ...manifest.rules.map((rule) => rule.path),
     ...manifest.skills.map((skill) => skill.path),
     ...(manifest.commands ?? []).map((command) => command.path),
+    ...(manifest.support ?? []).map((file) => file.path),
     ...manifest.extras ?? []
   ];
 }
@@ -11813,7 +11900,7 @@ async function inspectTargets(outDir, targets) {
         const edited = await isModified(outDir, previous, target.path);
         return { ...target, state: edited ? "modified" : "owned" };
       }
-      const there = await stat(join4(outDir, target.path)).then(
+      const there = await stat2(join4(outDir, target.path)).then(
         () => true,
         () => false
       );
@@ -11873,7 +11960,7 @@ async function claudeMdCleanup(outDir, previous) {
   return next === void 0 ? void 0 : { next };
 }
 async function exists(path) {
-  return stat(path).then(
+  return stat2(path).then(
     () => true,
     () => false
   );
@@ -11951,8 +12038,19 @@ function matches(artifact, stack) {
   }
   return { ok: true, matchedBy };
 }
+function supportInUse(support, others) {
+  const used = new Set(others.map((entry) => entry.artifact.provenance?.source));
+  const kept = [];
+  const unused = [];
+  for (const entry of support) {
+    const source = entry.artifact.provenance?.source;
+    if (used.has(source)) kept.push(entry);
+    else unused.push({ artifact: entry.artifact, reason: `nothing from ${source} is written` });
+  }
+  return { kept, unused };
+}
 function selectArtifacts(kb, stack) {
-  const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
+  const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd, ...kb.support];
   const selected = /* @__PURE__ */ new Map();
   const skipped = [];
   for (const artifact of all) {
@@ -11968,12 +12066,21 @@ function selectArtifacts(kb, stack) {
   );
   const uncovered = stack.technologies.filter((tech) => !covered.has(tech.id));
   const order = (a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id);
+  const ofType = (type) => [...selected.values()].filter((e) => e.artifact.meta.type === type).sort(order);
+  const rules = ofType("rule");
+  const skills = ofType("skill");
+  const commands = ofType("command");
+  const agentMd = ofType("agent-md");
+  const support = supportInUse(ofType("support"), [...rules, ...skills, ...commands, ...agentMd]);
   return {
-    rules: [...selected.values()].filter((e) => e.artifact.meta.type === "rule").sort(order),
-    skills: [...selected.values()].filter((e) => e.artifact.meta.type === "skill").sort(order),
-    commands: [...selected.values()].filter((e) => e.artifact.meta.type === "command").sort(order),
-    agentMd: [...selected.values()].filter((e) => e.artifact.meta.type === "agent-md").sort(order),
-    skipped: skipped.sort((a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id)),
+    rules,
+    skills,
+    commands,
+    agentMd,
+    support: support.kept,
+    skipped: [...skipped, ...support.unused].sort(
+      (a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id)
+    ),
     uncovered
   };
 }
@@ -11991,6 +12098,7 @@ function excludeArtifacts(selection, excluded, stack) {
   const skills = keep(selection.skills);
   const commands = keep(selection.commands);
   const agentMd = keep(selection.agentMd);
+  const support = supportInUse(keep(selection.support), [...rules, ...skills, ...commands, ...agentMd]);
   const covered = new Set(
     [...rules, ...skills, ...commands, ...agentMd].flatMap(
       (entry) => entry.artifact.meta.applies_to
@@ -12001,23 +12109,27 @@ function excludeArtifacts(selection, excluded, stack) {
     skills,
     commands,
     agentMd,
+    support: support.kept,
     skipped: [
       ...selection.skipped,
       ...dropped(selection.rules),
       ...dropped(selection.skills),
       ...dropped(selection.commands),
-      ...dropped(selection.agentMd)
+      ...dropped(selection.agentMd),
+      ...dropped(selection.support),
+      ...support.unused
     ].sort((a, b) => a.artifact.meta.id.localeCompare(b.artifact.meta.id)),
     uncovered: stack.technologies.filter((tech) => !covered.has(tech.id))
   };
 }
 
 // src/prompt.ts
-var TYPE_ORDER = ["rule", "skill", "command", "agent-md"];
+var TYPE_ORDER = ["rule", "skill", "command", "support", "agent-md"];
 var TYPE_LABEL = {
   rule: "Rules",
   skill: "Skills",
   command: "Commands",
+  support: "Support files (agents and references imported skills and commands use)",
   "agent-md": "AGENTS.md template (written only if absent)"
 };
 var STATE_NOTE = {
@@ -12396,6 +12508,7 @@ function validate(stack, selection, acceptedConflicts = [], kept = [], retained 
       skills: selection.skills.length,
       commands: selection.commands.length,
       agentMd: selection.agentMd.length,
+      support: selection.support.length,
       technologies: stack.technologies.length
     },
     ok: !findings.some((finding) => finding.severity === "error")
@@ -12593,8 +12706,9 @@ async function run(options) {
     const all = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
     for (const source of kb.imported) {
       const count = all.filter((a) => a.provenance?.source === source.name).length;
+      const support = kb.support.filter((a) => a.provenance?.source === source.name).length;
       process.stdout.write(
-        `Imported: ${source.name} ${count} artifact(s) from ${source.repo} at ${source.ref.slice(0, 7)} (${source.license})
+        `Imported: ${source.name} ${count} artifact(s) and ${support} support file(s) from ${source.repo} at ${source.ref.slice(0, 7)} (${source.license})
 `
       );
     }
@@ -12806,6 +12920,7 @@ function summarize(selection) {
     skills: describe(selection.skills),
     commands: describe(selection.commands),
     agentMd: describe(selection.agentMd),
+    support: describe(selection.support),
     skipped: selection.skipped.map((entry) => ({
       id: entry.artifact.meta.id,
       reason: entry.reason
@@ -12816,7 +12931,7 @@ function printReport(report) {
   const { counts } = report;
   process.stdout.write(
     `
-Selected ${counts.rules} rule(s), ${counts.skills} skill(s), ${counts.commands} command(s) and ${counts.agentMd} AGENTS.md template(s) for ${counts.technologies} framework(s).
+Selected ${counts.rules} rule(s), ${counts.skills} skill(s), ${counts.commands} command(s), ${counts.support} support file(s) and ${counts.agentMd} AGENTS.md template(s) for ${counts.technologies} framework(s).
 `
   );
   const errors = report.findings.filter((f) => f.severity === "error");

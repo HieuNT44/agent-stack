@@ -27,6 +27,7 @@ commands/<name>.md                      -> .claude/commands/<name>.md
 commands/framework/<fw>/<name>.md       -> .claude/commands/<fw>-<name>.md
 agent-md/<name>.md                      -> AGENTS.md, chỉ khi dự án chưa có
 agent-md/framework/<fw>/<name>.md       -> AGENTS.md, chỉ khi chọn <fw> và dự án chưa có
+support/<source>/<upstream path>        -> nơi upstream.yaml khai báo, chỉ cho nội dung import
 ```
 
 `<fw>` là id framework trong `catalog.yaml`. File nằm cạnh một `SKILL.md` — thư mục
@@ -188,6 +189,28 @@ mục framework lạ, hoặc khi một đường dẫn không thể thành tên 
 Global layer được copy từ một dự án MIT và commit ở đây:
 [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) — skill vào
 `skills/global/`, command vào `commands/`.
+
+Một số file import trỏ ra ngoài thư mục của chính nó: `/ship` và `/webperf` spawn các
+persona trong `agents/` của upstream, 11 skill link tới `../../references/`, và mỗi persona
+link tới `../docs/agents.md`. Những file đó được khai báo dưới `support` của nguồn trong
+`upstream.yaml` — đường dẫn upstream -> nơi nó nằm trong dự án sinh ra — và sync chép
+chúng vào `support/<source>/`. Nơi đến được chọn sao cho mọi link tương đối khớp mà không
+sửa byte nào của file import:
+
+| Upstream | Dự án sinh ra |
+| --- | --- |
+| `agents/` | `.claude/agents/` |
+| `references/` | `.claude/references/` |
+| `docs/agents.md` | `.claude/docs/agents.md` |
+
+File support chỉ được ghi khi còn ít nhất một artifact của nguồn đó được ghi; bỏ hết thì
+lần chạy sau xoá chúng như output cũ. Chúng hiện trong checklist, có checksum trong
+manifest dưới `support`, và một file dự án đã có — ví dụ `.claude/agents/code-reviewer.md`
+tự viết — được để nguyên như mọi file khác. Đích phải nằm dưới `.claude/` và không đè lên
+chỗ của rule, skill, command hay manifest. File dưới `support/` mà không khai báo nào bao
+thì load thất bại, nêu tên file.
+
+`support` chỉ dành cho nội dung import. Agent của riêng repo này chưa có loại nội dung nào.
 
 `upstream.yaml` ghi repository, commit chính xác, licence, và đường dẫn upstream nào ứng
 với đường dẫn nào ở đây. Commit là **SHA đủ 40 ký tự** — branch hay tag bị từ chối — nên

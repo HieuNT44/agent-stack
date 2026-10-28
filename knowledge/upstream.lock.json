@@ -42,7 +42,19 @@
         "skills/global/source-driven-development/SKILL.md",
         "skills/global/spec-driven-development/SKILL.md",
         "skills/global/test-driven-development/SKILL.md",
-        "skills/global/using-agent-skills/SKILL.md"
+        "skills/global/using-agent-skills/SKILL.md",
+        "support/agent-skills/agents/code-reviewer.md",
+        "support/agent-skills/agents/security-auditor.md",
+        "support/agent-skills/agents/test-engineer.md",
+        "support/agent-skills/agents/web-performance-auditor.md",
+        "support/agent-skills/docs/agents.md",
+        "support/agent-skills/references/accessibility-checklist.md",
+        "support/agent-skills/references/definition-of-done.md",
+        "support/agent-skills/references/observability-checklist.md",
+        "support/agent-skills/references/orchestration-patterns.md",
+        "support/agent-skills/references/performance-checklist.md",
+        "support/agent-skills/references/security-checklist.md",
+        "support/agent-skills/references/testing-patterns.md"
       ]
     }
   }
