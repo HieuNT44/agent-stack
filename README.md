@@ -183,16 +183,17 @@ agent-stack check --json       # cho CI
 `generate --write` trong terminal hiện một **checklist** liệt kê đúng những gì nó định ghi, kèm đường dẫn đích. Không file nào rời knowledge base trước khi bạn duyệt:
 
 ```
-Rules (3)
-> [x] rails-activerecord   .claude/rules/rails-activerecord.md
-  [x] rails-conventions    .claude/rules/rails-conventions.md
-  [ ] rails-ruby           .claude/rules/rails-ruby.md — already in the project
+Rules (29)
+> [x] rails-authorization  .claude/rules/rails-authorization.md
+  [x] rails-comments       .claude/rules/rails-comments.md
+  [ ] rails-style          .claude/rules/rails-style.md — already in the project
+  …
 
-Skills (29)
+Skills (30)
   [x] api-and-interface-design  .claude/skills/api-and-interface-design
   …
 
-40 of 42 selected, 1 left untouched because the project already has them
+68 of 69 selected, 1 left untouched because the project already has them
 ```
 
 `space` một dòng · `g` cả nhóm · `a`/`n` tất cả/không cái nào · `enter` ghi · `q` huỷ, không ghi gì.
