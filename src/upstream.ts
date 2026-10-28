@@ -33,12 +33,12 @@ const supportTarget = z
   );
 
 export const upstreamSourceSchema = z.object({
-  repo: z.string().url().startsWith('https://'),
+  repo: z.url().startsWith('https://'),
   /** Full 40-character commit SHA. A branch or tag is rejected: the copy must be traceable. */
   ref: z.string().regex(/^[0-9a-f]{40}$/, 'ref must be a full 40-character commit SHA'),
   license: z.string().min(1),
   /** Where the licence can be read. Travels into every generated file's origin comment. */
-  license_url: z.string().url(),
+  license_url: z.url(),
   copyright: z.string().min(1),
   /** Upstream path -> path under knowledge/. The targets mark which artifacts are imported. */
   copy: z.record(z.string().min(1), z.string().min(1)),

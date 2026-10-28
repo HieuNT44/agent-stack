@@ -484,6 +484,21 @@ describe('imported content', () => {
       upstreamSourceSchema.parse({ ...base, ref: 'a120596f6d7ff9b967a3f5e0331ea911376ee5ef' }),
     ).not.toThrow();
   });
+
+  it('rejects a source whose repo is not an https URL', () => {
+    const base = {
+      ref: 'a120596f6d7ff9b967a3f5e0331ea911376ee5ef',
+      license: 'MIT',
+      license_url: 'https://github.com/addyosmani/agent-skills/blob/main/LICENSE',
+      copyright: 'Copyright (c) Addy Osmani',
+      copy: { skills: 'skills/global' },
+    };
+    expect(() => upstreamSourceSchema.parse({ ...base, repo: 'http://github.com/a/b.git' })).toThrow();
+    expect(() => upstreamSourceSchema.parse({ ...base, repo: 'github.com/a/b' })).toThrow();
+    expect(() =>
+      upstreamSourceSchema.parse({ ...base, repo: 'https://github.com/a/b.git', license_url: 'LICENSE' }),
+    ).toThrow();
+  });
 });
 
 // What an earlier version wrote into CLAUDE.md is taken back out, and only that.
