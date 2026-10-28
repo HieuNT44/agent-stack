@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import type { InspectedTarget } from '../src/emit.js';
+import { fakeTty } from './fake-tty.js';
 import {
   approvedOverwrites,
   initialState,
@@ -112,6 +112,12 @@ describe('the approval checklist', () => {
     expect(splitKeys('an')).toEqual(['a', 'n']);
     expect(parseKey('z')).toBeUndefined();
   });
+
+  it('does nothing with an empty list but settle', () => {
+    const empty = initialState([]);
+    for (const key of ['k', 'j', ' ', 'g']) expect(press(empty, key)).toEqual(empty);
+    expect(press(empty, '\r').status).toBe('confirmed');
+  });
 });
 
 describe('rendering the checklist', () => {
@@ -139,40 +145,30 @@ describe('rendering the checklist', () => {
     expect(lines.join('\n')).toContain('more above');
     expect(lines.join('\n')).toContain('more below');
   });
+
+  // Scrolled to either end, only the other side says something is off screen.
+  it('says nothing is above at the top, or below at the bottom', () => {
+    const many: InspectedTarget[] = Array.from({ length: 60 }, (_, index) => ({
+      id: `rule-${String(index).padStart(2, '0')}`,
+      type: 'rule' as const,
+      path: `.claude/rules/rule-${index}.md`,
+      state: 'new' as const,
+    }));
+    const top = render(initialState(many), 20).join('\n');
+    expect(top).not.toContain('more above');
+    expect(top).toContain('more below');
+
+    const bottom = render(press(initialState(many), 'k'), 20).join('\n');
+    expect(bottom).toContain('more above');
+    expect(bottom).not.toContain('more below');
+  });
+
+  it('takes a terminal that reports no height as 24 rows', () => {
+    expect(render(initialState(targets), 0)).toEqual(render(initialState(targets), 24));
+  });
 });
 
 /** A terminal, as far as the picker is concerned: raw mode plus a key stream. */
-function fakeTty() {
-  const input = new EventEmitter() as unknown as NodeJS.ReadStream;
-  const written: string[] = [];
-  Object.assign(input, {
-    isTTY: true,
-    isRaw: false,
-    setRawMode(raw: boolean) {
-      (this as { isRaw: boolean }).isRaw = raw;
-      return this;
-    },
-    setEncoding() {
-      return input;
-    },
-    resume() {
-      return input;
-    },
-    pause() {
-      return input;
-    },
-  });
-  const output = {
-    isTTY: true,
-    rows: 30,
-    write(chunk: string) {
-      written.push(chunk);
-      return true;
-    },
-  } as unknown as NodeJS.WriteStream;
-
-  return { io: { input, output }, written, type: (keys: string) => input.emit('data', keys) };
-}
 
 describe('driving the checklist from a terminal', () => {
   it('redraws on every key and settles on enter', async () => {
@@ -206,5 +202,18 @@ describe('driving the checklist from a terminal', () => {
     type('\r');
 
     expect(rejected(await running)).toEqual([]);
+  });
+
+  it('ignores a key it has no use for, and draws on a terminal that reports no height', async () => {
+    const { io, written, type } = fakeTty();
+    Object.assign(io.output, { rows: undefined });
+    const running = runPicker(targets, io);
+    type('x');
+    type('\r');
+
+    const state = await running;
+    expect(state.status).toBe('confirmed');
+    expect(state.cursor).toBe(0);
+    expect(written[0]).toContain('Choose what to write');
   });
 });

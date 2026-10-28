@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { loadKnowledgeBase } from './catalog.js';
@@ -11,7 +10,13 @@ import {
   planEmit,
   readPreviousManifest,
 } from './emit.js';
-import { isInteractive, rejected, runPicker, type PickerItem } from './prompt.js';
+import {
+  isInteractive,
+  rejected,
+  runPicker,
+  type PickerIo,
+  type PickerItem,
+} from './prompt.js';
 import { resolveStack, UnknownTechnologyError, type ResolvedStack } from './resolver.js';
 import { renderTable } from './table.js';
 import { techStackInputSchema, type TechStackInput } from './schema.js';
@@ -144,12 +149,12 @@ function parseArgs(argv: string[]): Options {
 function formatStack(stack: ResolvedStack): string[] {
   return stack.technologies.map((tech) => {
     const via =
-      tech.origin === 'dependency' ? ` (required by ${tech.requiredBy[0] ?? 'unknown'})` : '';
+      tech.origin === 'dependency' ? ` (required by ${tech.requiredBy[0]})` : '';
     return `  ${tech.id}${via}`;
   });
 }
 
-async function run(options: Options): Promise<number> {
+async function run(options: Options, io: PickerIo): Promise<number> {
   if (options.command === 'help') {
     process.stdout.write(USAGE);
     return 0;
@@ -239,7 +244,7 @@ async function run(options: Options): Promise<number> {
   }
 
   if (options.command === 'check') {
-    return check(options, kb);
+    return check(options, kb, io);
   }
 
   if (options.command !== 'resolve' && options.command !== 'generate') {
@@ -268,7 +273,7 @@ async function run(options: Options): Promise<number> {
   }
 
   const approval = fullReport.ok
-    ? await approve(options, stack, fullSelection)
+    ? await approve(options, stack, fullSelection, io)
     : { cancelled: false as const, selection: fullSelection, kept: [], declined: [] };
   if (approval.cancelled) {
     process.stdout.write('\nCancelled. Nothing was written.\n');
@@ -293,7 +298,7 @@ async function run(options: Options): Promise<number> {
           report,
           emit: result,
           kept,
-          declined: declined.map(({ id, type, path }) => ({ id, type, path })),
+          declined,
         },
         null,
         2,
@@ -339,6 +344,7 @@ async function run(options: Options): Promise<number> {
 async function check(
   options: Options,
   kb: Awaited<ReturnType<typeof loadKnowledgeBase>>,
+  io: PickerIo,
 ): Promise<number> {
   let input = options.stack;
   if (input.framework.length === 0) {
@@ -371,7 +377,7 @@ async function check(
 
   // Never the checklist: a check decides nothing, so it takes the defaults an
   // unattended run would.
-  const { selection, kept } = await approve({ ...options, write: false }, stack, fullSelection);
+  const { selection, kept } = await approve({ ...options, write: false }, stack, fullSelection, io);
   const composed = compose(stack, selection, VERSION, kb.imported);
   const { retained, shadowing } = await planEmit(options.out, composed);
   const report = validate(stack, selection, options.acceptConflicts, kept, retained, shadowing);
@@ -407,7 +413,8 @@ interface Approval {
   cancelled: boolean;
   selection: ReturnType<typeof selectArtifacts>;
   kept: KeptPath[];
-  declined: PickerItem[];
+  /** What the operator unticked that was not the project's, as `--json` reports it. */
+  declined: Pick<PickerItem, 'id' | 'type' | 'path'>[];
 }
 
 /**
@@ -423,12 +430,12 @@ async function approve(
   options: Options,
   stack: ResolvedStack,
   selection: ReturnType<typeof selectArtifacts>,
+  io: PickerIo,
 ): Promise<Approval> {
   const targets = await inspectTargets(options.out, artifactTargets(selection));
-  const io = { input: process.stdin, output: process.stdout };
   const excluded = new Map<string, string>();
   const kept: KeptPath[] = [];
-  const declined: PickerItem[] = [];
+  const declined: Approval['declined'] = [];
 
   if (options.write && !options.json && !options.yes && isInteractive(io)) {
     const picked = await runPicker(targets, io, { overwrite: options.overwrite });
@@ -441,7 +448,7 @@ async function approve(
         kept.push({ id: item.id, path: item.path, state: item.state });
       } else {
         excluded.set(item.key, 'not approved');
-        declined.push(item);
+        declined.push({ id: item.id, type: item.type, path: item.path });
       }
     }
   } else if (!options.overwrite) {
@@ -499,30 +506,39 @@ function printReport(report: ReturnType<typeof validate>): void {
   }
 }
 
-const argv = process.argv.slice(2);
-try {
-  process.exitCode = await run(parseArgs(argv));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof UsageError) {
-    process.stderr.write(`${message}\n\n${USAGE}`);
-    process.exitCode = 64;
-  } else if (error instanceof UnknownTechnologyError) {
-    // The one thing the operator had to type correctly. Show what was on offer
-    // rather than making them run `catalog` to find out.
-    const catalog =
-      error.known.length > 0
-        ? `\nThe catalog has ${error.known.length} framework${
-            error.known.length === 1 ? '' : 's'
-          }:\n\n${renderTable(
-            [{ header: 'id' }, { header: 'name' }],
-            error.known.map((entry) => [entry.id, entry.name]),
-          )}\n`
-        : '\nThe catalog has no frameworks.\n';
-    process.stderr.write(`${message}\n${catalog}`);
-    process.exitCode = 65;
-  } else {
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 1;
+/**
+ * The whole CLI but the process itself: `bin.ts` hands it argv and sets the
+ * exit code. The terminal is a parameter so the checklist can be driven
+ * without one.
+ */
+export async function main(
+  argv: string[],
+  io: PickerIo = { input: process.stdin, output: process.stdout },
+): Promise<number> {
+  try {
+    return await run(parseArgs(argv), io);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof UsageError) {
+      process.stderr.write(`${message}\n\n${USAGE}`);
+      return 64;
+    } else if (error instanceof UnknownTechnologyError) {
+      // The one thing the operator had to type correctly. Show what was on offer
+      // rather than making them run `catalog` to find out.
+      const catalog =
+        error.known.length > 0
+          ? `\nThe catalog has ${error.known.length} framework${
+              error.known.length === 1 ? '' : 's'
+            }:\n\n${renderTable(
+              [{ header: 'id' }, { header: 'name' }],
+              error.known.map((entry) => [entry.id, entry.name]),
+            )}\n`
+          : '\nThe catalog has no frameworks.\n';
+      process.stderr.write(`${message}\n${catalog}`);
+      return 65;
+    } else {
+      process.stderr.write(`${message}\n`);
+      return 1;
+    }
   }
 }

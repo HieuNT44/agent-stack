@@ -45,10 +45,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/agent-stack.mjs --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\"",
+    "build": "esbuild src/bin.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/agent-stack.mjs --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run test && npm run build",
+    "coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run coverage && npm run build",
     "sync": "node scripts/sync-upstream.mjs",
     "try": "node scripts/try.mjs",
     "new-framework": "node scripts/new-framework.mjs"
@@ -59,6 +60,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "esbuild": "^0.28.2",
     "typescript": "^5.7.0",
     "vitest": "^4.1.12"

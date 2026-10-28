@@ -313,6 +313,15 @@ describe('the fastapi framework', () => {
 });
 
 describe('validation', () => {
+  // The resolver has nothing to warn about today; the validator still passes on
+  // whatever it is given, as a warning that does not fail the run.
+  it('carries a warning from the resolver into the report', async () => {
+    const { stack, selection } = await run('rails');
+    const report = validate({ ...stack, warnings: ['watch out'] }, selection);
+    expect(report.ok).toBe(true);
+    expect(report.findings).toContainEqual({ severity: 'warning', code: 'stack-warning', message: 'watch out' });
+  });
+
   it('blocks when no framework was given', async () => {
     const { report } = await run();
     expect(report.ok).toBe(false);

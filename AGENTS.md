@@ -29,7 +29,7 @@ touches the network.
 ## Commands
 
 ```bash
-npm run check    # typecheck + tests + bundle — before every push
+npm run check    # typecheck + tests at 100% coverage of src/ + bundle — before every push
 npm run try      # generate into .agent-stack-try/ (gitignored) and read the result
 npm run sync     # re-copy imported content at the pinned commit
 
@@ -55,6 +55,7 @@ One concern per module. Put a change where the concern already lives:
 | `emit.ts` | The only module that writes or deletes; what is on disk versus the manifest |
 | `table.ts` | Box-drawn tables for human output, and nothing else |
 | `cli.ts` | Flags, human and `--json` output |
+| `bin.ts` | The process boundary: argv in, exit code out, nothing else |
 
 **`emit.ts` may only remove paths listed in the previous run's manifest, and not one
 the project has edited since.** Never widen that. Everything outside the manifest
@@ -208,6 +209,10 @@ The global layer is copied from other repositories and committed here, pinned to
 ## Working here
 
 - New behaviour needs a test; a bug fix needs a test that fails before it.
+- Coverage of `src/` is held at 100% — statements, branches, functions, lines —
+  by `vitest.config.ts`, so `npm run check` fails below it. A branch no input can
+  reach is removed, not excluded: a fallback the types already rule out is noise
+  a reader has to reason past.
 - `tests/pipeline.test.ts` loads the real knowledge base, so a content change that
   breaks an invariant fails the suite.
 - Keep the CLI's `--json` shape stable — `commands/generate.md` parses it.

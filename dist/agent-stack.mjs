@@ -11852,7 +11852,7 @@ async function checksum(path) {
   return bytes === void 0 ? void 0 : createHash("sha256").update(bytes).digest("hex");
 }
 async function filesUnder(root, path) {
-  const entries = await readdir2(join4(root, path), { withFileTypes: true }).catch(() => []);
+  const entries = await readdir2(join4(root, path), { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     const child = posix4.join(path, entry.name);
@@ -11919,9 +11919,9 @@ async function finalManifest(composed) {
 async function planEmit(outDir, composed) {
   const write = [...composed.files.map((file) => file.path), MANIFEST_PATH];
   const leftAlone = [];
-  const agentsMdThere = composed.agentsMd !== void 0 && await exists(join4(outDir, composed.agentsMd.path));
   if (composed.agentsMd) {
-    (agentsMdThere ? leftAlone : write).push(composed.agentsMd.path);
+    const there = await exists(join4(outDir, composed.agentsMd.path));
+    (there ? leftAlone : write).push(composed.agentsMd.path);
   }
   const previous = await readPreviousManifest(outDir);
   const remove = [];
@@ -12092,7 +12092,7 @@ function excludeArtifacts(selection, excluded, stack) {
   const keep = (entries) => entries.filter((entry) => !excluded.has(artifactKey(entry.artifact.meta)));
   const dropped = (entries) => entries.filter((entry) => excluded.has(artifactKey(entry.artifact.meta))).map((entry) => ({
     artifact: entry.artifact,
-    reason: excluded.get(artifactKey(entry.artifact.meta)) ?? "not approved"
+    reason: excluded.get(artifactKey(entry.artifact.meta))
   }));
   const rules = keep(selection.rules);
   const skills = keep(selection.skills);
@@ -12392,7 +12392,6 @@ function resolveStack(catalog, input) {
   const conflicts = [];
   for (const id of ids) {
     const tech = catalog.technologies[id];
-    if (!tech) continue;
     for (const other of tech.conflicts_with) {
       if (!resolved.has(other)) continue;
       const key = conflictId(id, other);
@@ -12403,7 +12402,7 @@ function resolveStack(catalog, input) {
         id: key,
         left,
         right,
-        message: `${catalog.technologies[left]?.name ?? left} and ${catalog.technologies[right]?.name ?? right} are declared incompatible`
+        message: `${resolved.get(left).name} and ${resolved.get(right).name} are declared incompatible`
       });
     }
   }
@@ -12425,7 +12424,7 @@ function renderTable(columns, rows, indent = "  ") {
     (column, index) => Math.max(width(column.header), ...rows.map((row) => width(cell(row, index))), 1)
   );
   const line = (left, fill, join5, right) => `${indent}${left}${widths.map((w) => fill.repeat(w + 2)).join(join5)}${right}`;
-  const body = (cells) => `${indent}\u2502 ${columns.map((column, index) => pad(cells[index] ?? "", widths[index], column.align)).join(" \u2502 ")} \u2502`;
+  const body = (cells) => `${indent}\u2502 ${cells.map((value, index) => pad(value, widths[index], columns[index].align)).join(" \u2502 ")} \u2502`;
   return [
     line("\u250C", "\u2500", "\u252C", "\u2510"),
     body(columns.map((column) => column.header)),
@@ -12564,7 +12563,7 @@ the knowledge base, 64 usage, 65 unknown framework, 130 cancelled.
 `;
 var UsageError = class extends Error {
 };
-function parseArgs(argv2) {
+function parseArgs(argv) {
   const framework = [];
   const acceptConflicts = [];
   let command = "";
@@ -12574,10 +12573,10 @@ function parseArgs(argv2) {
   let json = false;
   let yes = false;
   let overwrite = false;
-  for (let i = 0; i < argv2.length; i += 1) {
-    const arg = argv2[i];
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
     const next = () => {
-      const value = argv2[i + 1];
+      const value = argv[i + 1];
       if (value === void 0 || value.startsWith("--")) {
         throw new UsageError(`${arg} needs a value`);
       }
@@ -12627,11 +12626,11 @@ function parseArgs(argv2) {
 }
 function formatStack(stack) {
   return stack.technologies.map((tech) => {
-    const via = tech.origin === "dependency" ? ` (required by ${tech.requiredBy[0] ?? "unknown"})` : "";
+    const via = tech.origin === "dependency" ? ` (required by ${tech.requiredBy[0]})` : "";
     return `  ${tech.id}${via}`;
   });
 }
-async function run(options) {
+async function run(options, io) {
   if (options.command === "help") {
     process.stdout.write(USAGE);
     return 0;
@@ -12715,7 +12714,7 @@ async function run(options) {
     return 0;
   }
   if (options.command === "check") {
-    return check(options, kb);
+    return check(options, kb, io);
   }
   if (options.command !== "resolve" && options.command !== "generate") {
     throw new UsageError(`Unknown command: ${options.command}`);
@@ -12742,7 +12741,7 @@ async function run(options) {
     }
     return fullReport.ok ? 0 : 2;
   }
-  const approval = fullReport.ok ? await approve(options, stack, fullSelection) : { cancelled: false, selection: fullSelection, kept: [], declined: [] };
+  const approval = fullReport.ok ? await approve(options, stack, fullSelection, io) : { cancelled: false, selection: fullSelection, kept: [], declined: [] };
   if (approval.cancelled) {
     process.stdout.write("\nCancelled. Nothing was written.\n");
     return 130;
@@ -12761,7 +12760,7 @@ async function run(options) {
           report,
           emit: result,
           kept,
-          declined: declined.map(({ id, type, path }) => ({ id, type, path }))
+          declined
         },
         null,
         2
@@ -12806,7 +12805,7 @@ ${result.dryRun ? "Would write" : "Wrote"} ${result.write.length} file(s) in ${r
   }
   return report.ok ? 0 : 2;
 }
-async function check(options, kb) {
+async function check(options, kb, io) {
   let input = options.stack;
   if (input.framework.length === 0) {
     const previous = await readPreviousManifest(options.out);
@@ -12834,7 +12833,7 @@ Run generate first, or name the framework with --framework to compare against it
     }
     return 2;
   }
-  const { selection, kept } = await approve({ ...options, write: false }, stack, fullSelection);
+  const { selection, kept } = await approve({ ...options, write: false }, stack, fullSelection, io);
   const composed = compose(stack, selection, VERSION, kb.imported);
   const { retained, shadowing } = await planEmit(options.out, composed);
   const report = validate(stack, selection, options.acceptConflicts, kept, retained, shadowing);
@@ -12873,9 +12872,8 @@ To apply: agent-stack generate ${flags} --write
 `);
   return 3;
 }
-async function approve(options, stack, selection) {
+async function approve(options, stack, selection, io) {
   const targets = await inspectTargets(options.out, artifactTargets(selection));
-  const io = { input: process.stdin, output: process.stdout };
   const excluded = /* @__PURE__ */ new Map();
   const kept = [];
   const declined = [];
@@ -12890,7 +12888,7 @@ async function approve(options, stack, selection) {
         kept.push({ id: item.id, path: item.path, state: item.state });
       } else {
         excluded.set(item.key, "not approved");
-        declined.push(item);
+        declined.push({ id: item.id, type: item.type, path: item.path });
       }
     }
   } else if (!options.overwrite) {
@@ -12946,31 +12944,35 @@ Selected ${counts.rules} rule(s), ${counts.skills} skill(s), ${counts.commands} 
 `);
   }
 }
-var argv = process.argv.slice(2);
-try {
-  process.exitCode = await run(parseArgs(argv));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof UsageError) {
-    process.stderr.write(`${message}
+async function main(argv, io = { input: process.stdin, output: process.stdout }) {
+  try {
+    return await run(parseArgs(argv), io);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof UsageError) {
+      process.stderr.write(`${message}
 
 ${USAGE}`);
-    process.exitCode = 64;
-  } else if (error instanceof UnknownTechnologyError) {
-    const catalog = error.known.length > 0 ? `
+      return 64;
+    } else if (error instanceof UnknownTechnologyError) {
+      const catalog = error.known.length > 0 ? `
 The catalog has ${error.known.length} framework${error.known.length === 1 ? "" : "s"}:
 
 ${renderTable(
-      [{ header: "id" }, { header: "name" }],
-      error.known.map((entry) => [entry.id, entry.name])
-    )}
+        [{ header: "id" }, { header: "name" }],
+        error.known.map((entry) => [entry.id, entry.name])
+      )}
 ` : "\nThe catalog has no frameworks.\n";
-    process.stderr.write(`${message}
+      process.stderr.write(`${message}
 ${catalog}`);
-    process.exitCode = 65;
-  } else {
-    process.stderr.write(`${message}
+      return 65;
+    } else {
+      process.stderr.write(`${message}
 `);
-    process.exitCode = 1;
+      return 1;
+    }
   }
 }
+
+// src/bin.ts
+process.exitCode = await main(process.argv.slice(2));

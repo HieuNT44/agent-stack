@@ -53,6 +53,27 @@ describe('resolveStack', () => {
   it('rejects an unknown technology instead of guessing', () => {
     expect(() => stack(['railz'])).toThrow(UnknownTechnologyError);
   });
+
+  it('promotes a dependency to input when it is also named', () => {
+    const result = stack(['rails', 'rails-api']);
+    expect(result.technologies.find((t) => t.id === 'rails-api')?.origin).toBe('input');
+  });
+
+  it('reports a conflict only when both sides are in the stack', () => {
+    expect(stack(['laravel']).conflicts).toEqual([]);
+  });
+
+  it('reports a conflict both sides declare once, named by both', () => {
+    const mutual = catalogSchema.parse({
+      version: 1,
+      technologies: {
+        rails: { name: 'Rails', conflicts_with: ['laravel'] },
+        laravel: { name: 'Laravel', conflicts_with: ['rails'] },
+      },
+    });
+    const { conflicts } = resolveStack(mutual, techStackInputSchema.parse({ framework: ['rails', 'laravel'] }));
+    expect(conflicts.map((c) => c.message)).toEqual(['Laravel and Rails are declared incompatible']);
+  });
 });
 
 // The framework is the one thing the operator has to type correctly, so a typo
