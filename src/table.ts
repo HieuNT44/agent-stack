@@ -36,9 +36,10 @@ export function renderTable(columns: Column[], rows: string[][], indent = '  '):
   const line = (left: string, fill: string, join: string, right: string): string =>
     `${indent}${left}${widths.map((w) => fill.repeat(w + 2)).join(join)}${right}`;
 
+  // One cell per column, always: the header row and `cell` both make sure of it.
   const body = (cells: string[]): string =>
-    `${indent}│ ${columns
-      .map((column, index) => pad(cells[index] ?? '', widths[index]!, column.align))
+    `${indent}│ ${cells
+      .map((value, index) => pad(value, widths[index]!, columns[index]!.align))
       .join(' │ ')} │`;
 
   return [

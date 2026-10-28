@@ -150,7 +150,7 @@ export function excludeArtifacts(
       .filter((entry) => excluded.has(artifactKey(entry.artifact.meta)))
       .map((entry) => ({
         artifact: entry.artifact,
-        reason: excluded.get(artifactKey(entry.artifact.meta)) ?? 'not approved',
+        reason: excluded.get(artifactKey(entry.artifact.meta))!,
       }));
 
   const rules = keep(selection.rules);

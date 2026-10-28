@@ -1,5 +1,6 @@
 node_modules/
 *.log
+coverage/
 .DS_Store
 
 # Scratch target for `npm run try` — generated output, never committed.

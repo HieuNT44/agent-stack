@@ -148,8 +148,8 @@ export function resolveStack(catalog: Catalog, input: TechStackInput): ResolvedS
   const seen = new Set<string>();
   const conflicts: Conflict[] = [];
   for (const id of ids) {
-    const tech = catalog.technologies[id];
-    if (!tech) continue;
+    // Every resolved id was looked up in the catalog on its way in.
+    const tech = catalog.technologies[id]!;
     for (const other of tech.conflicts_with) {
       if (!resolved.has(other)) continue;
       const key = conflictId(id, other);
@@ -160,9 +160,7 @@ export function resolveStack(catalog: Catalog, input: TechStackInput): ResolvedS
         id: key,
         left,
         right,
-        message: `${catalog.technologies[left]?.name ?? left} and ${
-          catalog.technologies[right]?.name ?? right
-        } are declared incompatible`,
+        message: `${resolved.get(left)!.name} and ${resolved.get(right)!.name} are declared incompatible`,
       });
     }
   }

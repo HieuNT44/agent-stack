@@ -45,4 +45,9 @@ describe('renderTable', () => {
       '  └────┘',
     ]);
   });
+
+  it('reads a row shorter than the header as blank cells', () => {
+    const out = renderTable([{ header: 'id' }, { header: 'name' }], [['rails']]);
+    expect(out).toContain('│ rails │ —    │');
+  });
 });

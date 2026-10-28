@@ -59,7 +59,8 @@ async function checksum(path: string): Promise<string | undefined> {
 
 /** Every file below a directory, relative to `root` in posix form. */
 async function filesUnder(root: string, path: string): Promise<string[]> {
-  const entries = await readdir(join(root, path), { withFileTypes: true }).catch(() => []);
+  // Only ever called on a directory that is there.
+  const entries = await readdir(join(root, path), { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
     const child = posix.join(path, entry.name);
@@ -183,10 +184,9 @@ export async function finalManifest(composed: ComposedOutput): Promise<Manifest>
 export async function planEmit(outDir: string, composed: ComposedOutput): Promise<EmitPlan> {
   const write = [...composed.files.map((file) => file.path), MANIFEST_PATH];
   const leftAlone: string[] = [];
-  const agentsMdThere =
-    composed.agentsMd !== undefined && (await exists(join(outDir, composed.agentsMd.path)));
   if (composed.agentsMd) {
-    (agentsMdThere ? leftAlone : write).push(composed.agentsMd.path);
+    const there = await exists(join(outDir, composed.agentsMd.path));
+    (there ? leftAlone : write).push(composed.agentsMd.path);
   }
 
   const previous = await readPreviousManifest(outDir);

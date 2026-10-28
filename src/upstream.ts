@@ -77,10 +77,6 @@ export function supportDir(source: string, from: string): string {
   return posix.join('support', source, from);
 }
 
-export function copyTarget(entry: string): string {
-  return entry;
-}
-
 export async function loadUpstream(root: string): Promise<ImportedSource[]> {
   const raw = await readFile(join(root, 'upstream.yaml'), 'utf8').catch(() => undefined);
   if (raw === undefined) return [];
