@@ -18,3 +18,12 @@ sources:
     copy:
       skills: skills/global
       .claude/commands: commands
+    # <upstream path> -> where it lands in a generated project. Files the
+    # imported skills and commands reach outside their own directory: /ship and
+    # /webperf spawn the personas in agents/, and eleven skills link to
+    # ../../references/. Each persona links to ../docs/agents.md, which links
+    # back to both. Kept under knowledge/support/agent-skills/.
+    support:
+      agents: .claude/agents
+      references: .claude/references
+      docs/agents.md: .claude/docs/agents.md

@@ -141,9 +141,10 @@ Once the user confirms, re-run the same command with `--write`.
 State:
 
 - the resolved stack, marking which technologies were pulled in as dependencies,
-- how many rules, skills and commands were applied,
+- how many rules, skills, commands and support files were applied,
 - every warning, in full,
-- the files written, grouped as rules, skills and commands,
+- the files written, grouped as rules, skills, commands and support files (the agents
+  and references the imported skills and commands use),
 - every path left untouched because the project already had it, and what that means:
   the project's own file is still there, and agent-stack's version was not applied,
 - which selected technologies have no content in the knowledge base yet,

@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -1090,5 +1092,220 @@ describe('a CLAUDE.md an earlier version wrote into', () => {
     const result = await emit(out, await composeFrom(kbRoot), { dryRun: true });
     expect(result.remove).toEqual(['CLAUDE.md']);
     expect(await readFile(join(out, 'CLAUDE.md'), 'utf8')).toBe(BLOCK);
+  });
+});
+
+// An imported skill or command can reach files outside its own directory: the
+// agent-skills `/ship` spawns personas from `agents/`, and its skills link to
+// `../../references/`. `support` in upstream.yaml carries those files to where
+// the imported files already expect them, so no imported byte is edited.
+describe('support files of an imported source', () => {
+  const UPSTREAM = [
+    'version: 1',
+    'sources:',
+    '  up:',
+    '    repo: https://github.com/example/up.git',
+    '    ref: a120596f6d7ff9b967a3f5e0331ea911376ee5ef',
+    '    license: MIT',
+    '    license_url: https://github.com/example/up/blob/main/LICENSE',
+    '    copyright: Copyright (c) Example',
+    '    copy:',
+    '      skills: skills/global',
+    '    support:',
+    '      agents: .claude/agents',
+    '      references: .claude/references',
+    '      docs/agents.md: .claude/docs/agents.md',
+    '',
+  ].join('\n');
+
+  const importedKnowledge = (extra: Record<string, string> = {}) =>
+    tempKnowledge({
+      'upstream.yaml': UPSTREAM,
+      'skills/global/shipping/SKILL.md': '# Ship\n\nSee [the list](../../references/checklist.md).\n',
+      'support/up/agents/code-reviewer.md': '# Reviewer\n',
+      'support/up/references/checklist.md': '# Checklist\n',
+      'support/up/docs/agents.md': '# Agents\n\n[Reviewer](../agents/code-reviewer.md)\n',
+      'rules/framework/rails/conventions.md': '# Rails\n',
+      ...extra,
+    });
+
+  /** Every relative Markdown link in the generated output that points at nothing. */
+  async function deadLinks(out: string): Promise<string[]> {
+    const claude = join(out, '.claude');
+    const files = (await readdir(claude, { recursive: true })).filter((f) => f.endsWith('.md'));
+    const dead: string[] = [];
+    for (const file of files) {
+      const text = await readFile(join(claude, file), 'utf8');
+      for (const [, target = ''] of text.matchAll(/\]\(([^)\s]+\.md)(?:#[^)]*)?\)/g)) {
+        if (/^[a-z]+:/i.test(target) || target.startsWith('/')) continue;
+        const exists = await readFile(join(claude, dirname(file), target)).then(
+          () => true,
+          () => false,
+        );
+        if (!exists) dead.push(`${file} -> ${target}`);
+      }
+    }
+    return dead.sort();
+  }
+
+  it('lands them where the declaration says, byte for byte, and owns them', async () => {
+    const kbRoot = await importedKnowledge();
+    const { kb, stack, selection } = await runOn(kbRoot, 'rails');
+    const out = await mkdtemp(join(tmpdir(), 'agent-stack-'));
+    const composed = compose(stack, selection, 'test', kb.imported);
+    await emit(out, composed, { dryRun: false });
+
+    expect(await readFile(join(out, '.claude/agents/code-reviewer.md'), 'utf8')).toBe('# Reviewer\n');
+    expect(await readFile(join(out, '.claude/references/checklist.md'), 'utf8')).toBe('# Checklist\n');
+    // A single file maps to a single file, as it does in `copy`.
+    expect(await readFile(join(out, '.claude/docs/agents.md'), 'utf8')).toContain('# Agents');
+    expect(await deadLinks(out)).toEqual([]);
+    expect(composed.manifest.support.map((entry) => entry.path)).toEqual([
+      '.claude/agents/code-reviewer.md',
+      '.claude/docs/agents.md',
+      '.claude/references/checklist.md',
+    ]);
+  });
+
+  it('goes with its source: no artifact of the source written, no support file either', async () => {
+    const kbRoot = await importedKnowledge();
+    const { stack, selection } = await runOn(kbRoot, 'rails');
+    const narrowed = excludeArtifacts(
+      selection,
+      new Map([[artifactKey({ type: 'skill', id: 'shipping' }), 'not approved']]),
+      stack,
+    );
+
+    expect(narrowed.support).toEqual([]);
+    expect(narrowed.rules.map((entry) => entry.artifact.meta.id)).toEqual(['rails-conventions']);
+  });
+
+  it('is removed as stale once its source is no longer written', async () => {
+    const kbRoot = await importedKnowledge();
+    const { kb, stack, selection } = await runOn(kbRoot, 'rails');
+    const out = await mkdtemp(join(tmpdir(), 'agent-stack-'));
+    await emit(out, compose(stack, selection, 'test', kb.imported), { dryRun: false });
+
+    const narrowed = excludeArtifacts(
+      selection,
+      new Map([[artifactKey({ type: 'skill', id: 'shipping' }), 'not approved']]),
+      stack,
+    );
+    const result = await emit(out, compose(stack, narrowed, 'test', kb.imported), {
+      dryRun: false,
+    });
+
+    expect(result.remove).toEqual([
+      '.claude/agents/code-reviewer.md',
+      '.claude/docs/agents.md',
+      '.claude/references/checklist.md',
+      '.claude/skills/shipping',
+    ]);
+  });
+
+  // `/ship` prefers a persona the project defined itself, so one already there
+  // is the project's choice, not a collision to overwrite.
+  it('leaves an agent the project already has where it is', async () => {
+    const kbRoot = await importedKnowledge();
+    const out = await mkdtemp(join(tmpdir(), 'agent-stack-'));
+    const mine = join(out, '.claude/agents/code-reviewer.md');
+    await mkdir(dirname(mine), { recursive: true });
+    await writeFile(mine, '# our reviewer\n', 'utf8');
+
+    const { stack, selection } = await runOn(kbRoot, 'rails');
+    const targets = await inspectTargets(out, artifactTargets(selection));
+    expect(targets.find((t) => t.path === '.claude/agents/code-reviewer.md')?.state).toBe('exists');
+  });
+
+  it('refuses a support directory upstream.yaml does not declare, naming it', async () => {
+    const kbRoot = await importedKnowledge({ 'support/up/hooks/pre.md': '# Hook\n' });
+    await expect(loadKnowledgeBase(kbRoot)).rejects.toThrow(
+      /support\/up\/hooks\/pre\.md: not declared/,
+    );
+  });
+
+  it('refuses a declaration with nothing synced under it, naming it', async () => {
+    const kbRoot = await importedKnowledge();
+    await rm(join(kbRoot, 'support/up/references'), { recursive: true });
+    await expect(loadKnowledgeBase(kbRoot)).rejects.toThrow(
+      /support\/up\/references: declared under support in upstream\.yaml, but nothing is there/,
+    );
+  });
+
+  // A project generated before support files existed has a manifest with no
+  // `support` key. It owns none of them, so the run writes them and removes nothing.
+  it('adds them to a project whose manifest predates them', async () => {
+    const kbRoot = await importedKnowledge();
+    const { kb, stack, selection } = await runOn(kbRoot, 'rails');
+    const out = await mkdtemp(join(tmpdir(), 'agent-stack-'));
+    const composed = compose(stack, selection, 'test', kb.imported);
+    await emit(out, composed, { dryRun: false });
+    const manifestPath = join(out, '.claude/agent-stack-manifest.json');
+    const { support: _, ...old } = JSON.parse(await readFile(manifestPath, 'utf8'));
+    await writeFile(manifestPath, JSON.stringify(old), 'utf8');
+    for (const dir of ['agents', 'docs', 'references']) {
+      await rm(join(out, '.claude', dir), { recursive: true });
+    }
+
+    const result = await emit(out, composed, { dryRun: false });
+    expect(result.remove).toEqual([]);
+    expect(result.write).toContain('.claude/agents/code-reviewer.md');
+    expect(await readFile(join(out, '.claude/agents/code-reviewer.md'), 'utf8')).toBe('# Reviewer\n');
+  });
+
+  it('will not compose a support file the loader gave no target', async () => {
+    const kbRoot = await importedKnowledge();
+    const { kb, stack, selection } = await runOn(kbRoot, 'rails');
+    const [first] = selection.support;
+    if (!first) throw new Error('fixture has no support file');
+    const { target: _, ...artifact } = first.artifact;
+    const broken = { ...selection, support: [{ ...first, artifact }] };
+    expect(() => compose(stack, broken, 'test', kb.imported)).toThrow(/without a target/);
+  });
+
+  it('refuses a target outside .claude/, or one that would land on another type', () => {
+    const base = {
+      repo: 'https://github.com/example/up.git',
+      ref: 'a120596f6d7ff9b967a3f5e0331ea911376ee5ef',
+      license: 'MIT',
+      license_url: 'https://github.com/example/up/blob/main/LICENSE',
+      copyright: 'Copyright (c) Example',
+      copy: { skills: 'skills/global' },
+    };
+    for (const target of ['agents', '.claude/../agents', '.claude/skills/x', '.claude/rules']) {
+      expect(() => upstreamSourceSchema.parse({ ...base, support: { agents: target } })).toThrow();
+    }
+    expect(() =>
+      upstreamSourceSchema.parse({ ...base, support: { agents: '.claude/agents' } }),
+    ).not.toThrow();
+  });
+
+  // The real knowledge base: /ship and /webperf spawn these by name, and eleven
+  // imported skills link to the checklists.
+  it('gives /ship and /webperf their personas, and every imported link a file', async () => {
+    const { out } = await generate('rails');
+    for (const agent of ['code-reviewer', 'security-auditor', 'test-engineer', 'web-performance-auditor']) {
+      await expect(readFile(join(out, `.claude/agents/${agent}.md`), 'utf8')).resolves.toBeTruthy();
+    }
+    expect(await deadLinks(out)).toEqual([]);
+  });
+
+  // The bundled CLI, as the plugin runs it: the counts in human output and the
+  // `support` list under --json, which commands/generate.md reads.
+  it('is counted by the CLI, and listed under --json', async () => {
+    const cli = resolve(import.meta.dirname, '..', 'dist', 'agent-stack.mjs');
+    const exec = promisify(execFile);
+    const out = await mkdtemp(join(tmpdir(), 'agent-stack-'));
+
+    const catalog = await exec('node', [cli, 'catalog']);
+    expect(catalog.stdout).toMatch(/Imported: agent-skills \d+ artifact\(s\) and 12 support file\(s\)/);
+
+    const generated = JSON.parse(
+      (await exec('node', [cli, 'generate', '--framework', 'rails', '--json', '--out', out])).stdout,
+    );
+    expect(generated.report.counts.support).toBe(12);
+    expect(generated.selection.support.map((entry: { id: string }) => entry.id)).toContain(
+      'agents/code-reviewer.md',
+    );
   });
 });

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error - a plain .mjs script, imported for its pure helpers only.
-import { deliveredPaths, stalePaths, walk } from '../scripts/sync-upstream.mjs';
+import { copyMap, deliveredPaths, stalePaths, walk } from '../scripts/sync-upstream.mjs';
 
 async function checkout(files: Record<string, string>) {
   const root = await mkdtemp(join(tmpdir(), 'agent-stack-checkout-'));
@@ -73,5 +73,24 @@ describe('stalePaths', () => {
 
   it('removes nothing on the first sync, when there is no record yet', () => {
     expect(stalePaths([], ['skills/global/tdd/SKILL.md'])).toEqual([]);
+  });
+});
+
+describe('copyMap', () => {
+  it('adds each support path under support/<source>/, beside the copy map', () => {
+    expect(
+      copyMap('up', {
+        copy: { skills: 'skills/global' },
+        support: { agents: '.claude/agents', references: '.claude/references' },
+      }),
+    ).toEqual({
+      skills: 'skills/global',
+      agents: 'support/up/agents',
+      references: 'support/up/references',
+    });
+  });
+
+  it('is the copy map alone for a source with no support', () => {
+    expect(copyMap('up', { copy: { skills: 'skills/global' } })).toEqual({ skills: 'skills/global' });
   });
 });

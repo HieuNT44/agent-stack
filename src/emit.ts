@@ -126,6 +126,7 @@ function ownedPaths(manifest: Manifest): string[] {
     ...manifest.rules.map((rule) => rule.path),
     ...manifest.skills.map((skill) => skill.path),
     ...(manifest.commands ?? []).map((command) => command.path),
+    ...(manifest.support ?? []).map((file) => file.path),
     ...(manifest.extras ?? []),
   ];
 }

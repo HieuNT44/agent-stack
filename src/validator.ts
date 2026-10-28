@@ -26,6 +26,7 @@ export interface ValidationReport {
     skills: number;
     commands: number;
     agentMd: number;
+    support: number;
     technologies: number;
   };
   ok: boolean;
@@ -154,6 +155,7 @@ export function validate(
       skills: selection.skills.length,
       commands: selection.commands.length,
       agentMd: selection.agentMd.length,
+      support: selection.support.length,
       technologies: stack.technologies.length,
     },
     ok: !findings.some((finding) => finding.severity === 'error'),

@@ -70,6 +70,17 @@ export async function deliveredPaths(copy, checkout) {
 }
 
 /**
+ * Everything a source copies: its `copy` map, plus each `support` path, which
+ * is kept under support/<source>/<upstream path>. That place is the one
+ * `supportDir` in src/upstream.ts reads it from.
+ */
+export function copyMap(name, source) {
+  const map = { ...source.copy };
+  for (const from of Object.keys(source.support ?? {})) map[from] = `support/${name}/${from}`;
+  return map;
+}
+
+/**
  * What the last sync delivered and this one does not. Everything else under the
  * destination — anything hand-written — is not ours to remove.
  */
@@ -153,7 +164,8 @@ async function main() {
       console.log(`${name}: fetching ${source.repo} at ${ref}`);
       await checkout(source.repo, ref, work);
 
-      const delivered = await deliveredPaths(source.copy, work);
+      const copy = copyMap(name, source);
+      const delivered = await deliveredPaths(copy, work);
       const previous = lock.sources[name]?.files;
       if (previous === undefined) {
         console.log(
@@ -170,7 +182,7 @@ async function main() {
         console.log(`  - knowledge/${path}`);
       }
 
-      for (const [from, to] of Object.entries(source.copy)) {
+      for (const [from, to] of Object.entries(copy)) {
         const target = join(KNOWLEDGE, to);
         await mkdir(dirname(target), { recursive: true });
         await cp(join(work, from), target, { recursive: true });

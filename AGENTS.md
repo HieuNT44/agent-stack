@@ -125,7 +125,8 @@ knowledge/
 ├── rules/framework/<fw>/<name>.md        -> .claude/rules/<fw>-<name>.md
 ├── skills/framework/<fw>/<name>/SKILL.md -> .claude/skills/<name>/, with its files
 ├── commands/<name>.md                    -> .claude/commands/<name>.md
-└── agent-md/<name>.md                    -> AGENTS.md, written only if absent
+├── agent-md/<name>.md                    -> AGENTS.md, written only if absent
+└── support/<source>/<upstream path>      -> where upstream.yaml declares, imported content only
 ```
 
 **The path is the metadata, and the file is never touched.** Four things are read off
@@ -190,6 +191,13 @@ The global layer is copied from other repositories and committed here, pinned to
   in that record is never a candidate for removal. Commit the lock file with the content
   it describes — without it, the next sync cannot tell an upstream deletion from your
   work, and removes nothing at all.
+- **An imported file that reaches outside its own directory** — `/ship` spawning the
+  personas in upstream's `agents/`, a skill linking to `../../references/` — gets that
+  file through `support` in `upstream.yaml`: upstream path -> where it lands under
+  `.claude/`, chosen so every relative link resolves with no imported byte edited. Sync
+  keeps it in `knowledge/support/<source>/`. A support file is written only while
+  something from its source is, and is otherwise owned, checksummed and protected like
+  any artifact. It is not a content type for this repository's own files.
 - Moving a pin is a reviewable commit: `npm run sync -- --ref <sha>`, then read the diff
   of what it brought in.
 - Attribution lives once per generated project, in `.claude/agent-stack-manifest.json` under

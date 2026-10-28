@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
@@ -10,6 +10,28 @@ import { z } from 'zod';
  * record exists to say where they came from, to carry the licence obligations
  * into the generated output, and to tell `npm run sync` what to copy.
  */
+/** Where agent-stack's own output lands, so a support file cannot claim it. */
+const RESERVED = ['.claude/rules', '.claude/skills', '.claude/commands', '.claude/agent-stack-manifest.json'];
+
+/**
+ * A support target: a directory under `.claude/` that no other type writes to.
+ * It is where the imported files already look for it, so nothing imported has
+ * to be edited to find it.
+ */
+const supportTarget = z
+  .string()
+  .refine(
+    (target) =>
+      target.startsWith('.claude/') &&
+      posix.normalize(target) === target &&
+      !target.split('/').includes('..'),
+    'a support target is a plain path under .claude/',
+  )
+  .refine(
+    (target) => !RESERVED.some((path) => target === path || target.startsWith(`${path}/`)),
+    'a support target cannot land where rules, skills, commands or the manifest are written',
+  );
+
 export const upstreamSourceSchema = z.object({
   repo: z.string().url().startsWith('https://'),
   /** Full 40-character commit SHA. A branch or tag is rejected: the copy must be traceable. */
@@ -20,6 +42,14 @@ export const upstreamSourceSchema = z.object({
   copyright: z.string().min(1),
   /** Upstream path -> path under knowledge/. The targets mark which artifacts are imported. */
   copy: z.record(z.string().min(1), z.string().min(1)),
+  /**
+   * Upstream path -> where it lands in a generated project. For files the
+   * imported skills and commands reach outside their own directory: personas a
+   * command spawns, references a skill links to. Synced to
+   * `knowledge/support/<source>/<upstream path>`, and emitted only while
+   * something from this source is.
+   */
+  support: z.record(z.string().min(1), supportTarget).default({}),
 });
 
 export type UpstreamSource = z.infer<typeof upstreamSourceSchema>;
@@ -38,6 +68,13 @@ export interface ImportedSource {
   copyright: string;
   /** Paths under knowledge/ that hold this source's files. */
   paths: string[];
+  /** Each support path: where it sits under knowledge/, and where it lands. */
+  support: { dir: string; target: string }[];
+}
+
+/** Where a source's support path is kept under knowledge/. `npm run sync` writes it there. */
+export function supportDir(source: string, from: string): string {
+  return posix.join('support', source, from);
 }
 
 export function copyTarget(entry: string): string {
@@ -58,6 +95,10 @@ export async function loadUpstream(root: string): Promise<ImportedSource[]> {
 
   const sources: ImportedSource[] = [];
   for (const [name, source] of Object.entries(parsed.data.sources)) {
+    const support = Object.entries(source.support).map(([from, target]) => ({
+      dir: supportDir(name, from),
+      target,
+    }));
     sources.push({
       name,
       repo: source.repo,
@@ -65,7 +106,8 @@ export async function loadUpstream(root: string): Promise<ImportedSource[]> {
       license: source.license,
       licenseUrl: source.license_url,
       copyright: source.copyright,
-      paths: Object.values(source.copy),
+      paths: [...Object.values(source.copy), ...support.map((entry) => entry.dir)],
+      support,
     });
   }
   return sources;

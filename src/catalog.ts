@@ -1,5 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { basename, dirname, join, posix, relative, sep } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
   catalogSchema,
@@ -32,6 +32,11 @@ export interface Artifact {
   source: string;
   /** Other files in a skill's directory, relative to `dir`. Copied alongside. */
   files: string[];
+  /**
+   * Where a support file lands in the project, as upstream.yaml declares it.
+   * Every other type lands where its id says.
+   */
+  target?: string;
   provenance?: Provenance;
 }
 
@@ -43,6 +48,8 @@ export interface KnowledgeBase {
   commands: Artifact[];
   /** Seeds the project's AGENTS.md, written only when the project has none. */
   agentMd: Artifact[];
+  /** Files imported content reaches outside its own directory. */
+  support: Artifact[];
   imported: ImportedSource[];
 }
 
@@ -137,6 +144,44 @@ async function loadArtifact(path: string, root: string, type: ArtifactType): Pro
   return { meta: metaFromPath(source, type), path, dir, source, files };
 }
 
+/**
+ * The support files of every imported source. Their id is where they land
+ * under `.claude/`, which is what the checklist shows and what makes two
+ * sources claiming one path a duplicate.
+ */
+async function loadSupport(root: string, imported: ImportedSource[]): Promise<Artifact[]> {
+  const artifacts: Artifact[] = [];
+  for (const source of imported) {
+    for (const { dir, target } of source.support) {
+      const base = join(root, dir);
+      // A support path is a directory or, like a `copy` entry, a single file.
+      const single = await stat(base).then(
+        (entry) => entry.isFile(),
+        () => false,
+      );
+      for (const path of single ? [base] : await listFiles(base)) {
+        const landing = single
+          ? target
+          : posix.join(target, relative(base, path).split(sep).join('/'));
+        artifacts.push({
+          meta: {
+            id: posix.relative('.claude', landing),
+            type: 'support',
+            layer: 'global',
+            applies_to: [],
+          },
+          path,
+          dir: dirname(path),
+          source: relative(root, path),
+          files: [],
+          target: landing,
+        });
+      }
+    }
+  }
+  return artifacts;
+}
+
 function attachProvenance(artifacts: Artifact[], imported: ImportedSource[]): void {
   for (const artifact of artifacts) {
     const owner = imported.find((source) =>
@@ -182,8 +227,9 @@ export async function loadKnowledgeBase(root: string): Promise<KnowledgeBase> {
   const skills = await collect('skills', 'skill', (path) => basename(path) === 'SKILL.md');
   const commands = await collect('commands', 'command', (path) => path.endsWith('.md'));
   const agentMd = await collect('agent-md', 'agent-md', (path) => path.endsWith('.md'));
+  const support = await loadSupport(root, imported);
 
-  attachProvenance([...rules, ...skills, ...commands, ...agentMd], imported);
+  attachProvenance([...rules, ...skills, ...commands, ...agentMd, ...support], imported);
 
   const kb: KnowledgeBase = {
     root,
@@ -192,9 +238,14 @@ export async function loadKnowledgeBase(root: string): Promise<KnowledgeBase> {
     skills,
     commands,
     agentMd,
+    support,
     imported,
   };
-  const problems = [...lintKnowledgeBase(kb), ...(await unknownDirectories(root))].sort();
+  const problems = [
+    ...lintKnowledgeBase(kb),
+    ...(await unknownDirectories(root)),
+    ...(await supportProblems(root, imported)),
+  ].sort();
   if (problems.length > 0) {
     throw new Error(`Knowledge base is inconsistent:\n  - ${problems.join('\n  - ')}`);
   }
@@ -202,7 +253,7 @@ export async function loadKnowledgeBase(root: string): Promise<KnowledgeBase> {
 }
 
 /** The directories the loader reads. Anything else at the top would be skipped. */
-const CONTENT_DIRS = ['rules', 'skills', 'commands', 'agent-md'];
+const CONTENT_DIRS = ['rules', 'skills', 'commands', 'agent-md', 'support'];
 
 /**
  * A top-level directory the loader does not read is content that would never
@@ -220,11 +271,32 @@ async function unknownDirectories(root: string): Promise<string[]> {
     );
 }
 
+/**
+ * `support/` and its declarations have to agree both ways. A file no
+ * declaration covers would sit there unread; a declaration with nothing synced
+ * under it would leave every link to it dead, and say nothing.
+ */
+async function supportProblems(root: string, imported: ImportedSource[]): Promise<string[]> {
+  const declared = imported.flatMap((source) => source.support.map((entry) => entry.dir));
+  const files = (await listFiles(join(root, 'support'))).map((path) =>
+    relative(root, path).split(sep).join('/'),
+  );
+  const covers = (dir: string, path: string) => path === dir || path.startsWith(`${dir}/`);
+  return [
+    ...files
+      .filter((path) => !declared.some((dir) => covers(dir, path)))
+      .map((path) => `${path}: not declared under support in upstream.yaml — nothing would emit it`),
+    ...declared
+      .filter((dir) => !files.some((path) => covers(dir, path)))
+      .map((dir) => `${dir}: declared under support in upstream.yaml, but nothing is there — run npm run sync`),
+  ];
+}
+
 /** Referential integrity of the knowledge base itself, independent of any stack. */
 export function lintKnowledgeBase(kb: KnowledgeBase): string[] {
   const problems: string[] = [];
   const techIds = new Set(Object.keys(kb.catalog.technologies));
-  const artifacts = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd];
+  const artifacts = [...kb.rules, ...kb.skills, ...kb.commands, ...kb.agentMd, ...kb.support];
   const byId = new Map<string, Artifact>();
 
   for (const artifact of artifacts) {
