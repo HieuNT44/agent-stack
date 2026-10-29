@@ -49,7 +49,7 @@ The procedure for adding or changing one endpoint. Each step points to a rule in
 
 Before writing specs, review the handler you just wrote. If authorization is never called, or input is persisted without validation, report that instead of writing a spec that freezes it.
 
-Write specs per `nestjs-testing.md`, at the level the neighbouring specs test (a request through the app, or the service directly). Cover each case below that applies. Skip one that does not and say why: a public endpoint has no unauthenticated case, data with no owner has no someone-else's-record case.
+Write specs per `nestjs-testing.md`, at the level the neighbouring specs test. A spec that builds a `TestingModule` for one class follows the `nestjs-unit-test` skill. When the access check lives in the service, that unit spec still covers Unauthorized and Someone else's record from the table below. A spec that sends a request through the app covers each case below that applies. Skip one that does not and say why: a public endpoint has no unauthenticated case, data with no owner has no someone-else's-record case.
 
 | Case | Verify |
 |---|---|

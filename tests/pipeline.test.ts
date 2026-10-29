@@ -301,11 +301,12 @@ describe('selection', () => {
       'nestjs-security',
       'nestjs-testing',
     ]);
-    expect(skills).toHaveLength(4);
+    expect(skills).toHaveLength(5);
     expect(skills).toEqual([
       'nestjs-endpoint',
       'nestjs-infer-conventions',
       'nestjs-migration',
+      'nestjs-unit-test',
       'nestjs-verify',
     ]);
     expect(report.ok).toBe(true);
