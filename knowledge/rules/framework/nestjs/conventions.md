@@ -21,7 +21,7 @@ Decide where a new file goes before writing it, in this order:
 1. The directory map in `AGENTS.md` or a **Project-specific** section.
 2. A file of the same kind in the same feature: put the new one beside it.
 3. A file of the same kind in another feature: copy its sub-folder pattern into the target feature (`dto/`, `entities/`, or flat).
-4. No example anywhere: `src/<feature>/` holds `<feature>.module.ts`, `<feature>.controller.ts`, and `<feature>.service.ts`, with `dto/` and `entities/` beside them. A unit spec sits next to its source; end-to-end specs go in `test/`.
+4. No example anywhere: under the app root (`apps/<name>/src` when `nest-cli.json` lists projects, otherwise `src/`), `<feature>/` holds `<feature>.module.ts`, `<feature>.controller.ts`, and `<feature>.service.ts`, with `dto/` and `entities/` beside them. A unit spec sits next to its source; end-to-end specs go in `test/`.
 
 A project organised by layer (`controllers/`, `services/`, `dtos/` at the top) stays organised by layer. Add to the layer folders; do not start a feature folder or move files.
 
