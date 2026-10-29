@@ -62,7 +62,7 @@ Skip pure formatting, anything ESLint or `tsconfig` already rejects, and a frame
 |---|---|---|
 | N1 | **Commands**: package manager, lint, typecheck, test, e2e, and whether they run in a container **→ AGENTS.md (Commands & environment)** | `package.json` scripts, CI, lockfile |
 | N2 | **Installed NestJS major** (10, 11, or 12), **HTTP adapter** (Express or Fastify), and **module format** (CommonJS or ESM) **→ AGENTS.md (Code & architecture)** | `package.json`, lockfile, `"type": "module"` |
-| N3 | **Node.js** the app, the CLI, and the tests run on, only when the installed major has a minimum in `nestjs-conventions.md` › Versions or `nestjs-testing.md` **→ AGENTS.md (Commands & environment)** | `engines`, `.nvmrc`, CI image |
+| N3 | **Node.js** the app, the CLI, and the tests run on, only when the installed major has a minimum in `nestjs-conventions.md` › Versions & runtime or `nestjs-testing.md` **→ AGENTS.md (Commands & environment)** | `engines`, `.nvmrc`, CI image |
 | N4 | **How files are created**: `nest g` with the flags the project passes (`--no-spec`, `--flat`), or by hand | `nest-cli.json`, the layout of recent files |
 | N5 | **File names** that differ from kebab-case dotted roles | a few filenames |
 | N6 | **Logger**: Nest `Logger`, `nestjs-pino`, winston, or the project's own; and how a class gets one (`new Logger(Foo.name)` or injected) | `package.json`, grep `Logger` under `src/` |
