@@ -284,25 +284,30 @@ describe('selection', () => {
     const { stack, selection, report } = await run('nestjs');
     expect(stack.technologies.map((tech) => tech.id)).toEqual(['nestjs']);
 
-    expect(selection.rules.map((entry) => entry.artifact.meta.id)).toEqual(
-      expect.arrayContaining([
-        'nestjs-architecture',
-        'nestjs-config',
-        'nestjs-conventions',
-        'nestjs-http',
-        'nestjs-persistence',
-        'nestjs-security',
-        'nestjs-testing',
-      ]),
-    );
-    expect(selection.skills.map((entry) => entry.artifact.meta.id)).toEqual(
-      expect.arrayContaining([
-        'nestjs-endpoint',
-        'nestjs-infer-conventions',
-        'nestjs-migration',
-        'nestjs-verify',
-      ]),
-    );
+    const rules = selection.rules
+      .filter((entry) => entry.artifact.meta.applies_to.includes('nestjs'))
+      .map((entry) => entry.artifact.meta.id);
+    const skills = selection.skills
+      .filter((entry) => entry.artifact.meta.applies_to.includes('nestjs'))
+      .map((entry) => entry.artifact.meta.id);
+
+    expect(rules).toHaveLength(7);
+    expect(rules).toEqual([
+      'nestjs-architecture',
+      'nestjs-config',
+      'nestjs-conventions',
+      'nestjs-http',
+      'nestjs-persistence',
+      'nestjs-security',
+      'nestjs-testing',
+    ]);
+    expect(skills).toHaveLength(4);
+    expect(skills).toEqual([
+      'nestjs-endpoint',
+      'nestjs-infer-conventions',
+      'nestjs-migration',
+      'nestjs-verify',
+    ]);
     expect(report.ok).toBe(true);
   });
 
